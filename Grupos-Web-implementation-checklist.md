@@ -248,12 +248,12 @@ Public sharing currently remains hash-based (`/#grupo-<id>`); direct SSR/SEO gro
 
 Estados: **Completa** = comportamiento implementado y evidencia de despliegue/prueba documentada; **Parcial** = existe solo parte, o la verificación positiva/prueba de usuario está pendiente; **Pendiente** = no implementado; **Bloqueada** = exige configuración externa/decisión del titular. Este cruce es una auditoría documental basada en el historial de cambios y comprobaciones listados arriba; no reemplaza una nueva prueba de cada ruta ni afirma que todos los features funcionan en todas las cuentas/dispositivos.
 
-**Resultado de este cruce: 24 completas, 47 parciales, 25 pendientes y 4 bloqueadas (total 100).** Esto no equivale al tally del checklist operativo.
+**Resultado de este cruce: 25 completas, 47 parciales, 24 pendientes y 4 bloqueadas (total 100).** Esto no equivale al tally del checklist operativo.
 
 | # | Propuesta original | Estado | Evidencia / límite |
 |---:|---|---|---|
 | 1 | Tarjeta de comunidad con portada, categoría, actividad y datos clave | Parcial | La tarjeta muestra foto/categoría/estado/fecha; no muestra actividad reciente. No hay suficientes grupos para validar variedad.Contabilizar como parcial. |
-| 2 | Modo oscuro y claro | Pendiente | Solo se documenta el tema oscuro actual; no hay selector claro. |
+| 2 | Modo oscuro y claro | Completa | Selector claro/oscuro accesible en el encabezado; primera visita conserva el tema oscuro, la preferencia explícita se persiste en almacenamiento local con fallback protegido y CSS específico para controles, formularios, tarjetas y diálogos. Se alternaron ambos temas, se comprobó persistencia tras recargar y operabilidad con teclado en producción; `/health` y consola revisados. |
 | 3 | Mejorar experiencia móvil en formularios y detalles | Parcial | Hay CSS responsive y vistas de diálogo; no consta una prueba completa en varios móviles. |
 | 4 | Animación breve de carga para grupos y comentarios | Parcial | Hay estados de carga y animaciones puntuales; no se verificó un sistema común de carga. |
 | 5 | Mensajes claros de éxito y error | Completa | Los flujos visibles usan estados/mensajes de éxito y error; verificado en los formularios probados. |
@@ -363,3 +363,13 @@ Estados: **Completa** = comportamiento implementado y evidencia de despliegue/pr
 - Las pruebas solo escribieron almacenamiento local del navegador; no se enviaron formularios ni se llamaron endpoints de escritura. No se modificaron grupos, comentarios, cuentas, calificaciones, denuncias ni ajustes del servicio. Abrir el detalle activó el comportamiento existente de registrar el grupo como visto recientemente; el código nuevo usa una clave separada y no reemplaza la lista reciente ni favoritos. El modo de publicaciones bloqueadas no se pudo probar porque no había publicaciones bloqueadas y el control está oculto en ese caso.
 - El renglón #8 estaba clasificado como **Pendiente** en el cruce existente, no como Parcial. Al pasar #8 a Completa y no cambiar ningún otro estado, el recuento fiel de las 100 filas es **24 completas, 47 parciales, 25 pendientes y 4 bloqueadas**. El tally alternativo 24/46/26/4 implicaría mover un elemento parcial a Completa y mantener Pendiente sin cambios; eso no coincide con el estado anterior de #8 y no se hizo ningún cambio adicional de propuesta.
 
+
+
+## Selector de tema claro/oscuro (2026-11-26)
+- Commit de implementación `077cad863591a6fcf4a6696c249a4ae26f3c5e46` (parent `fe318130c136345e8e38d07bf2aa3f80d9c56a0c`): añade el selector accesible del encabezado, tema oscuro como valor inicial y preferencia explícita en `gw-theme-preference-v1`; lectura/escritura protegidas frente a `localStorage` bloqueado y `prefers-color-scheme` solo como fallback seguro. Añade estilos claros acotados a componentes, controles, tarjetas y diálogos, conserva el bloque de impresión y documenta el uso/alcance local en README.
+- Commit correctivo `a3e671fd1a252437713e1bb0fa73bb5fc5aa3eb6` (parent `077cad863591a6fcf4a6696c249a4ae26f3c5e46`): oscurece los colores de acento de texto en tema claro para mantener contraste legible sin oscurecer los fondos de botones.
+- Producción sirvió la clave del tema y el CSS de contraste final. `/health` devolvió HTTP 200 y `{"ok":true,"database":"ready"}`; `main` quedó en `a3e671fd1a252437713e1bb0fa73bb5fc5aa3eb6`.
+- Smoke test en navegador de producción: la primera vista se mostró oscura; el botón expuso nombre accesible estable y `aria-pressed` adecuado, los cambios por clic y Barra espaciadora funcionaron, y las selecciones claro y oscuro persistieron cada una tras recargar. Se inspeccionaron tarjeta/directorio, ficha/modal de grupo, diálogo de cuenta y formulario de publicación en ambos temas, sin enviar ningún formulario. El bloque `@media print` no cambió. Consola final sin mensajes de error; no se observaron errores de recursos sin resolver.
+- La prueba solo realizó solicitudes de lectura para cargar la página y los datos públicos del grupo/comentarios; abrir la ficha actualizó únicamente el historial local de vistos recientes del navegador. No se enviaron formularios ni se llamaron endpoints de escritura; no se modificaron grupos, comentarios, cuentas, calificaciones, denuncias, datos, configuración ni plan de Render.
+- Validación local: Python `HTMLParser` aceptó el HTML y no encontró IDs duplicados (118 únicos); las llaves CSS balancean (441 pares). Este entorno no tiene Node.js, por lo que no se afirma una comprobación local `node --check`; el script se ejecutó en el navegador de producción.
+- Al pasar únicamente la propuesta #2 de **Pendiente** a **Completa**, el cruce total actualizado de las 100 propuestas queda en **25 completas, 47 parciales, 24 pendientes y 4 bloqueadas**.
