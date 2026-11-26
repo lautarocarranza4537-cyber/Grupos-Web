@@ -2,6 +2,10 @@
 
 Directorio público para buscar y publicar grupos. Incluye perfil del grupo, foto, categoría, idioma opcional, descripción, enlace público para unirse y animaciones livianas de píxeles que se desvanecen, destellos al tocar y entradas progresivas al desplazarse. Las animaciones respetan la preferencia de reducir movimiento del dispositivo. Las publicaciones quedan en PostgreSQL y se comparten entre todos los visitantes. Cada publicación puede marcarse como abierta o cerrada a nuevos miembros; las fichas cerradas siguen visibles y buscables, pero no muestran la acción para unirse ni copiar la invitación. Las publicaciones antiguas se conservan abiertas por defecto. No requiere Supabase, claves de API, ni editar un archivo de configuración.
 
+## Tema claro y oscuro
+
+La página conserva el tema oscuro existente como apariencia inicial. El botón «Tema: oscuro/claro» del encabezado permite alternarlo; la elección explícita se guarda únicamente en este navegador, con la clave local `gw-theme-preference-v1`, y se restaura al volver. No se envía al servidor ni se sincroniza con la cuenta. Si el navegador bloquea el almacenamiento local, el cambio sigue funcionando durante la visita y la preferencia del sistema solo se usa como alternativa segura para elegir la apariencia inicial.
+
 ## Cómo se guardan las fotos y publicaciones
 
 Las fotos se reducen en el navegador y quedan almacenadas como datos de imagen junto a la publicación en PostgreSQL. Cada publicación también puede incluir reglas o detalles públicos opcionales (hasta 1.200 caracteres), editables por quien la publicó. El código crea la tabla y aplica migraciones aditivas automáticamente al iniciar. Por eso la web necesita una base PostgreSQL persistente conectada por `DATABASE_URL`; no guardes publicaciones en el disco efímero del servicio web.

@@ -17,6 +17,19 @@
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebSite","name":"Grupos Web","url":"https://grupos-web.onrender.com/","inLanguage":"es-AR","description":"Directorio para descubrir y compartir grupos públicos de WhatsApp y comunidades."}
   </script>
+  <script>
+    (() => {
+      const key = 'gw-theme-preference-v1';
+      let theme = 'dark';
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved === 'light' || saved === 'dark') theme = saved;
+      } catch {
+        try { if (window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light'; } catch {}
+      }
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -92,11 +105,116 @@
       #dialog .related-groups[hidden], #dialog [hidden] { display: none !important; }
       * { animation: none !important; transition: none !important; }
     }
-</style>
+
+    /* Light theme is opt-in; the existing dark appearance remains the first-visit default. */
+    [data-theme="light"]{color-scheme:light;--bg:#f5f7fb;--panel:#ffffff;--text:#182033;--muted:#4b5567;--line:rgba(15,23,42,.16);--lime:#b8df45;--purple:#6848b5}
+    [data-theme="light"] body{background:var(--bg);color:var(--text)}
+    [data-theme="light"] .topbar{background:rgba(255,255,255,.94);border-color:#d9deea}
+    [data-theme="light"] .brand-light{color:#596273}
+    [data-theme="light"] .hero{background:radial-gradient(ellipse at 85% 15%,#e8e0fa 0%,transparent 38%),linear-gradient(135deg,#f8f9fc,#eef1f8);color:#182033}
+    [data-theme="light"] .hero-copy>p{color:#4b5567}
+    [data-theme="light"] .hero-g{color:#e5e8f1}
+    [data-theme="light"] .float-tag{background:#fff;color:#283247;border-color:#d7dce8;box-shadow:0 4px 18px #26324a12}
+    [data-theme="light"] .hero-bottom{color:#5c6576}
+    [data-theme="light"] .content{background:radial-gradient(ellipse at 80% 0%,#f0ebfb 0%,#f7f8fb 45%,#f2f4f8 100%);color:#182033}
+    [data-theme="light"] .directory-guide{color:#475166;border-color:#d5dbe6}
+    [data-theme="light"] .directory-guide h2,[data-theme="light"] .directory-guide h3{color:#182033}
+    [data-theme="light"] .directory-guide strong,[data-theme="light"] .directory-guide a{color:#513a91}
+    [data-theme="light"] .expiry-notice{background:linear-gradient(110deg,#f5f8e9,#f5f1fb);color:#30394b;border-color:#a9c94d;box-shadow:0 8px 24px #23304b10}
+    [data-theme="light"] .expiry-notice strong,[data-theme="light"] .expiry-publish strong{color:#34451a}
+    [data-theme="light"] .expiry-notice b{color:#182033}
+    [data-theme="light"] .expiry-notice p{color:#4b5567}
+    [data-theme="light"] .expiry-publish{background:#f2f6e8;color:#3f4b31}
+    [data-theme="light"] .search{background:#fff;border-color:#cbd2df}
+    [data-theme="light"] .search input{color:#182033}
+    [data-theme="light"] .search input::placeholder{color:#697386}
+    [data-theme="light"] .card{background:#fff;border-color:#d5dbe6;box-shadow:0 3px 12px #1d2a4210}
+    [data-theme="light"] .card:hover,[data-theme="light"] .card:focus-visible{border-color:#7258b1;box-shadow:0 12px 28px #27355220,0 0 0 2px #7258b122}
+    [data-theme="light"] .card-img{background:#e7eaf0}
+    [data-theme="light"] .card p,[data-theme="light"] .empty p,[data-theme="light"] .count,[data-theme="light"] .status{color:#4b5567}
+    [data-theme="light"] .card-date{color:#586276}
+    [data-theme="light"] .pill{background:#eeeaf8;color:#493b70}
+    [data-theme="light"] .publication-status{background:#e6f5e8;color:#225b2d}
+    [data-theme="light"] .publication-status.closed{background:#fff0e8;color:#813d19}
+    [data-theme="light"] .publish{background:radial-gradient(ellipse at 0 100%,#eee8fa,transparent 52%),#f5f7fb;color:#182033}
+    [data-theme="light"] .publish-intro>p,[data-theme="light"] .note{color:#4b5567}
+    [data-theme="light"] .note b,[data-theme="light"] .field strong{color:#43551a}
+    [data-theme="light"] .field{color:#30394b}
+    [data-theme="light"] .field input,[data-theme="light"] .field textarea,[data-theme="light"] .field select,[data-theme="light"] .auth-form input,[data-theme="light"] .profile-form input,[data-theme="light"] .comment-form select,[data-theme="light"] .comment-form textarea,[data-theme="light"] .comment-report-form select,[data-theme="light"] .comment-report-form textarea{background:#fff;color:#182033;border-color:#bfc7d5}
+    [data-theme="light"] .field input::placeholder,[data-theme="light"] .field textarea::placeholder{color:#667085}
+    [data-theme="light"] .field small{color:#596477}
+    [data-theme="light"] .field input:focus,[data-theme="light"] .field textarea:focus,[data-theme="light"] .field select:focus,[data-theme="light"] .comment-form textarea:focus{border-color:#6848b5;box-shadow:0 0 0 3px #6848b522}
+    [data-theme="light"] .file-input::file-selector-button{background:#e9eaf0;color:#273047}
+    [data-theme="light"] .remove-photo{color:#513a91}
+    [data-theme="light"] .footer{color:#4b5567;border-color:#d9deea}
+    [data-theme="light"] .footer .brand{color:#182033}
+    [data-theme="light"] .dialog{background:#fff;color:#182033;box-shadow:0 22px 70px #18203340}
+    [data-theme="light"] .dialog::backdrop{background:#18203380}
+    [data-theme="light"] .close{background:#fff;color:#182033;border:1px solid #cbd2df}
+    [data-theme="light"] .dialog-img{background:#e7eaf0}
+    [data-theme="light"] .dialog-body p{color:#3f4a5f}
+    [data-theme="light"] .dialog-body .pill{background:#eeeaf8;color:#493b70}
+    [data-theme="light"] .directory-tools select,[data-theme="light"] .tool-button{background:#fff;color:#30394b;border-color:#cbd2df}
+    [data-theme="light"] .tool-button[aria-pressed="true"]{background:#26334b;color:#fff;border-color:#26334b}
+    [data-theme="light"] .account-button{background:#fff;color:#35451c;border-color:#a8c94e}
+    [data-theme="light"] .auth-dialog p,[data-theme="light"] .account-note{color:#4b5567!important}
+    [data-theme="light"] .profile-form,[data-theme="light"] .password-form,[data-theme="light"] .report-form{background:#f6f7fa;border-color:#d5dbe6}
+    [data-theme="light"] .profile-avatar-preview{background:#e7eaf0}
+    [data-theme="light"] .profile-feedback,[data-theme="light"] .comments-feedback,[data-theme="light"] .auth-feedback,[data-theme="light"] .password-feedback,[data-theme="light"] .report-feedback{color:#36551e!important}
+    [data-theme="light"] .auth-feedback.error,[data-theme="light"] .status.error,[data-theme="light"] .feedback.error{color:#a12622!important}
+    [data-theme="light"] .directory-tools select{color-scheme:light}
+    [data-theme="light"] .favorite-card{background:#26334be8;color:#fff;border-color:#657087}
+    [data-theme="light"] .comments-section{background:linear-gradient(145deg,#f5f6fa,#fff 72%);border-color:#d5dbe6}
+    [data-theme="light"] .comments-head{border-color:#dfe3eb}
+    [data-theme="light"] .comments-head h3,[data-theme="light"] .comment-meta{color:#182033}
+    [data-theme="light"] .comments-head h3 span,[data-theme="light"] .comments-public,[data-theme="light"] .comment-parent,[data-theme="light"] .comment-date{color:#566176}
+    [data-theme="light"] .comment-item{border-color:#e5e8ef}
+    [data-theme="light"] .comment-avatar{background:linear-gradient(145deg,#e5def5,#e9edf5);color:#443569;border-color:#d1d7e2}
+    [data-theme="light"] .comment-report,[data-theme="light"] .comment-action{color:#39445a}
+    [data-theme="light"] .comment-action{background:#f6f7fa;border-color:#cbd2df}
+    [data-theme="light"] .comment-action:hover{background:#e9ecf3;color:#182033}
+    [data-theme="light"] .comment-action.danger{color:#9b2525;border-color:#c87878}
+    [data-theme="light"] .comment-text{color:#273247!important}
+    [data-theme="light"] .comment-empty{color:#566176!important}
+    [data-theme="light"] .more-comments{background:#f2f4f8;color:#35451c;border-color:#cbd2df}
+    [data-theme="light"] .more-comments:hover{background:#e8ebf2}
+    [data-theme="light"] .comment-composer{background:#f5f6fa;border-color:#dfe3eb}
+    [data-theme="light"] .comment-privacy-note{background:#f5f8e9;color:#364127!important;border-color:#b4ce68}
+    [data-theme="light"] .comment-privacy-note strong{color:#35451c}
+    [data-theme="light"] .rating-panel{background:#f7f8fb;border-color:#d5dbe6}
+    [data-theme="light"] .rating-summary,[data-theme="light"] .rating-hint{color:#4b5567!important}
+    [data-theme="light"] .publisher-note{color:#4b5567!important}
+    [data-theme="light"] .action-button{background:#eef0f5;color:#273247;border-color:#cbd2df}
+    [data-theme="light"] .action-button:hover{background:#e3e7ef;border-color:#7258b1}
+    [data-theme="light"] .action-button.danger{color:#9b2525;border-color:#c87878}
+    [data-theme="light"] .toggle-blocked,[data-theme="light"] .contact-preview{color:#513a91}
+    [data-theme="light"] .duplicate-url-feedback{color:#684b13}
+    [data-theme="light"] .group-rules{background:#f5f6fa;border-left-color:#78952b}
+    [data-theme="light"] .group-rules p,[data-theme="light"] .preview-rules{color:#39445a!important}
+    [data-theme="light"] .related-groups{background:#f7f8fb;border-color:#d5dbe6}
+    [data-theme="light"] .related-group-link{background:#fff;color:#273247;border-color:#d5dbe6}
+    [data-theme="light"] .related-group-link:hover{background:#f1eff8;border-color:#7258b1}
+    [data-theme="light"] .related-group-link small,[data-theme="light"] .preview-contact{color:#43551a}
+    [data-theme="light"] .form-preview{background:#f6f7fa;border-color:#cbd2df}
+    [data-theme="light"] .form-preview>p{color:#4b5567}
+    [data-theme="light"] .preview-card{background:#fff;border-color:#d5dbe6}
+    [data-theme="light"] .preview-card img{background:#e7eaf0}
+    [data-theme="light"] .preview-card p{color:#4b5567}
+    [data-theme="light"] .preview-rules{border-color:#d5dbe6}
+    [data-theme="light"] .char-counter{color:#596477}
+    [data-theme="light"] .skip-link{background:#dcedae;color:#182033}
+    [data-theme="light"] :focus-visible{outline-color:#513a91!important}
+    .theme-toggle{min-height:38px;margin-left:10px;padding:0 12px;border:1px solid #d4ff6370;border-radius:8px;background:#171b26;color:#f5f6fa;font:600 11px var(--sans);cursor:pointer;white-space:nowrap}
+    .theme-toggle:hover{border-color:#d4ff63;background:#222838}
+    .theme-toggle:focus-visible{outline:3px solid var(--purple);outline-offset:3px}
+    [data-theme="light"] .theme-toggle{background:#fff;color:#273247;border-color:#bfc7d5}
+    [data-theme="light"] .theme-toggle:hover{background:#f0f2f7}
+    @media(max-width:620px){.theme-toggle{margin-left:6px;padding:0 8px;font-size:10px}.account-button{margin-left:6px;padding:7px 8px}}
+  </style>
 </head>
 <body>
   <a class="skip-link" href="#explorar">Saltar al directorio</a>
-  <header class="topbar"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><div><a class="top-link" href="#publicar">Publicar un grupo ↗</a><button class="account-button" id="account-button" type="button">Entrar / crear cuenta</button></div></header>
+  <header class="topbar"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><div><a class="top-link" href="#publicar">Publicar un grupo ↗</a><button class="account-button" id="account-button" type="button">Entrar / crear cuenta</button><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Tema claro u oscuro" aria-pressed="false">☾ Tema: oscuro</button></div></header>
   <main id="inicio">
     <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> COMUNIDADES PARA ENCONTRARTE</div><h1>Tu próxima<br><span>comunidad</span> de WhatsApp.</h1><p>Encontrá grupos de WhatsApp para unirte, explorá comunidades por tus intereses y compartí la tuya.</p><a class="button button-primary" href="#explorar">Explorar grupos <span>↓</span></a></div><div class="hero-art" aria-hidden="true"><div class="orb one"></div><div class="orb two"></div><div class="orbit"></div><div class="orbit alt"></div><div class="hero-g">G</div><div class="float-tag tag-a">✦ gente nueva</div><div class="float-tag tag-b">● comunidad</div></div><div class="hero-bottom"><span>UN LUGAR PARA CADA INTERÉS</span><span class="hero-line"></span><span>01 — 03</span></div></section>
     <section class="content" id="explorar"><aside class="expiry-notice" role="note"><strong>Base temporal:</strong> esta base gratuita de Render vence a los <b>30 días</b>. <p>Si el sitio queda inactivo, los grupos podrían dejar de verse y tal vez haya que volver a publicarlos cuando se reactive. Guardá la descripción y el enlace de tu grupo.</p></aside><div class="section-head"><div><div class="eyebrow muted">DIRECTORIO ABIERTO</div><h2>Encontrá tu grupo</h2></div><span class="count" id="count" role="status" aria-live="polite" aria-atomic="true">Cargando…</span></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="Buscar grupos" aria-describedby="search-help" list="search-suggestions" placeholder="Buscá por nombre, descripción o categoría…" autocomplete="off"></label><datalist id="search-suggestions"></datalist><span class="sr-only" id="search-help">Al escribir, podés elegir una sugerencia de nombre o categoría de los grupos públicos. También podés escribir cualquier búsqueda.</span><div class="directory-tools" aria-label="Filtros de grupos"><label class="sr-only" for="category-filter">Filtrar por categoría</label><select id="category-filter" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select><label class="sr-only" for="language-filter">Filtrar por idioma</label><select id="language-filter" aria-label="Filtrar por idioma"><option value="">Todos los idiomas</option></select><label class="sr-only" for="publication-filter">Filtrar por estado</label><select id="publication-filter" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="active">Abiertos a nuevos miembros</option><option value="closed">Cerrados a nuevos miembros</option></select><label class="sr-only" for="sort-groups">Ordenar grupos</label><select id="sort-groups" aria-label="Ordenar grupos"><option value="newest">Más nuevos</option><option value="rating">Mejor puntuados</option><option value="rated">Más votados</option><option value="name">Nombre A-Z</option><option value="recent">Vistos recientemente</option></select><button type="button" class="tool-button" id="favorites-filter" aria-pressed="false">♡ Guardados</button><button type="button" class="tool-button" id="reset-filters" disabled>Restablecer filtros</button></div><span class="sr-only" id="filter-feedback" role="status" aria-live="polite"></span><button class="toggle-blocked" id="toggle-blocked" type="button" hidden>Ver publicaciones bloqueadas</button><div class="status" id="status" role="status">Conectando con el directorio…</div><div class="grid" id="grid"></div><div class="empty" id="empty" hidden><h3>Todavía no hay grupos por acá</h3><p>Podés ser la primera persona en compartir uno.</p></div>
@@ -116,6 +234,17 @@
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
+  const THEME_KEY = 'gw-theme-preference-v1';
+  const themeToggle = $('#theme-toggle');
+  function applyTheme(theme, persist = false) {
+    const light = theme === 'light';
+    document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    themeToggle.setAttribute('aria-pressed', String(light));
+    themeToggle.textContent = light ? '☀ Tema: claro' : '☾ Tema: oscuro';
+    if (persist) { try { localStorage.setItem(THEME_KEY, light ? 'light' : 'dark'); } catch {} }
+  }
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+  themeToggle.addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light', true));
   const grid = $('#grid'), status = $('#status'), empty = $('#empty'), count = $('#count');
   const form = $('#form'), search = $('#search'), photo = $('#photo'), feedback = $('#feedback'), submit = $('#submit');
   let groups = [], processedPhoto = '', profilePhoto = '', commentPhoto = '', editPhoto = '', editPreviewGroup = null, showBlocked = false, currentUser = null, authMode = 'login', openCommentGroup = null, commentOffset = 0, commentTotal = 0, commentsLoading = false, commentRequest = 0, searchRenderTimer = 0, filterPreferencesReady = false;
