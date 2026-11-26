@@ -34,6 +34,7 @@ Safety: real user data is live. Never reset/delete real rows or use them for mut
 21. [x] No data-reset SQL, group/comment mutation, Render plan/settings change, or unverified backup claim was performed. No test account/group was created because current code lacks a safe account self-deletion flow.
 
 ## 2026-11-26 implementation record
+- Item 40: añadida advertencia visible y accesible en el compositor de comentarios, antes de publicar, con ejemplos concretos de datos personales; README actualizado. Verificación en producción pendiente de deploy.
 - Commit `b1195c8daff65f4c6eb6f25dbe2cb817538f71e9`: bounded report intake, additive report/visibility schema, token-gated moderation API, UI and operations notes.
 - Commit `9d90eac1b4676a71c9cb5a729f6b1bb82592d607`: authenticated password change with session revocation.
 - Production smoke results: `/health` returned `{"ok":true,"database":"ready"}`; `/api/groups` still returned one visible group; report form opened in browser; invalid report reason returned 400; report against nonexistent ID returned 404; moderation queue returned 503 because the environment token is not configured; unauthenticated password change returned 401; no browser console errors observed.
@@ -247,7 +248,7 @@ Public sharing currently remains hash-based (`/#grupo-<id>`); direct SSR/SEO gro
 
 Estados: **Completa** = comportamiento implementado y evidencia de despliegue/prueba documentada; **Parcial** = existe solo parte, o la verificación positiva/prueba de usuario está pendiente; **Pendiente** = no implementado; **Bloqueada** = exige configuración externa/decisión del titular. Este cruce es una auditoría documental basada en el historial de cambios y comprobaciones listados arriba; no reemplaza una nueva prueba de cada ruta ni afirma que todos los features funcionan en todas las cuentas/dispositivos.
 
-**Resultado de este cruce: 22 completas, 48 parciales, 26 pendientes y 4 bloqueadas (total 100).** Esto no equivale al tally del checklist operativo.
+**Resultado de este cruce: 23 completas, 47 parciales, 26 pendientes y 4 bloqueadas (total 100).** Esto no equivale al tally del checklist operativo.
 
 | # | Propuesta original | Estado | Evidencia / límite |
 |---:|---|---|---|
@@ -290,7 +291,7 @@ Estados: **Completa** = comportamiento implementado y evidencia de despliegue/pr
 | 37 | Limitar tamaño/formato de imágenes de comentarios | Completa | Formatos y límites/procesamiento están aplicados en cliente/servidor; validado estáticamente y en smoke checks. |
 | 38 | Cargar más comentarios al desplazarse | Parcial | Botón “Ver más” paginado existe; carga automática al desplazarse no. |
 | 39 | Fijar comentario importante | Pendiente | No implementado. |
-| 40 | Advertir antes de publicar datos personales en comentarios | Parcial | La ficha advierte que el contenido es público; no hay advertencia contextual específica en el formulario de comentario. |
+| 40 | Advertir antes de publicar datos personales en comentarios | Completa | El formulario muestra, antes del botón de envío, una advertencia accesible: el texto y la foto son públicos y recomienda no incluir datos personales propios ni ajenos; el aviso y estilo se verificaron en producción sin enviar comentarios. |
 | 41 | Inicio de sesión con Google | Bloqueada | Requiere configuración del propietario en Google Cloud/OAuth; no hay credenciales OAuth listas y MFA/verificación quedó pendiente. |
 | 42 | Recuperación de cuenta por correo | Bloqueada | No hay proveedor de correo configurado ni mecanismo seguro de recuperación. |
 | 43 | Acceso por teléfono con verificación SMS | Bloqueada | Requiere proveedor/credenciales y configuración externa del propietario. |
