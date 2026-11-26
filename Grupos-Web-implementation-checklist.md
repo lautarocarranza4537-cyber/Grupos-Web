@@ -34,7 +34,7 @@ Safety: real user data is live. Never reset/delete real rows or use them for mut
 21. [x] No data-reset SQL, group/comment mutation, Render plan/settings change, or unverified backup claim was performed. No test account/group was created because current code lacks a safe account self-deletion flow.
 
 ## 2026-11-26 implementation record
-- Item 40: añadida advertencia visible y accesible en el compositor de comentarios, antes de publicar, con ejemplos concretos de datos personales; README actualizado. Verificación en producción pendiente de deploy.
+- Item 40: commit `e984f7caaaaf30833cad45893f1ad0713e37d2c5` añade la advertencia visible y accesible antes del botón de publicación, con ejemplos concretos de datos personales; README actualizado. Producción sirvió `/grupo/8` con HTTP 200, el árbol de accesibilidad mostró el aviso antes de «Publicar comentario», y `/health` informó DB `ready`. No se envió comentario ni se mutaron datos. La consola registró dos errores de carga de recursos (HTTP 503 y 404); no se verificó la causa, aunque la ficha y el aviso se renderizaron correctamente.
 - Commit `b1195c8daff65f4c6eb6f25dbe2cb817538f71e9`: bounded report intake, additive report/visibility schema, token-gated moderation API, UI and operations notes.
 - Commit `9d90eac1b4676a71c9cb5a729f6b1bb82592d607`: authenticated password change with session revocation.
 - Production smoke results: `/health` returned `{"ok":true,"database":"ready"}`; `/api/groups` still returned one visible group; report form opened in browser; invalid report reason returned 400; report against nonexistent ID returned 404; moderation queue returned 503 because the environment token is not configured; unauthenticated password change returned 401; no browser console errors observed.
