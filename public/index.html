@@ -88,7 +88,7 @@
   const $ = (s) => document.querySelector(s);
   const grid = $('#grid'), status = $('#status'), empty = $('#empty'), count = $('#count');
   const form = $('#form'), search = $('#search'), photo = $('#photo'), feedback = $('#feedback'), submit = $('#submit');
-  let groups = [], processedPhoto = '', profilePhoto = '', commentPhoto = '', editPhoto = '', editPreviewGroup = null, showBlocked = false, currentUser = null, authMode = 'login', openCommentGroup = null, commentOffset = 0, commentTotal = 0, commentsLoading = false, commentRequest = 0;
+  let groups = [], processedPhoto = '', profilePhoto = '', commentPhoto = '', editPhoto = '', editPreviewGroup = null, showBlocked = false, currentUser = null, authMode = 'login', openCommentGroup = null, commentOffset = 0, commentTotal = 0, commentsLoading = false, commentRequest = 0, searchRenderTimer = 0;
   const BLOCK_CONTACTS = 'gw-blocked-contacts-v1', BLOCK_IDS = 'gw-blocked-listings-v1', FAVORITES_KEY='gw-favorites-v1', RECENT_KEY='gw-recent-v1';
   let favoritesOnly=false;
   const readList = key => { try { const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; } catch { return []; } };
@@ -120,6 +120,7 @@
     } catch (e) { status.textContent=e.message; status.classList.add('error'); count.textContent='Sin conexión'; }
   }
   function render() {
+    clearTimeout(searchRenderTimer); searchRenderTimer=0;
     const q=search.value.trim().toLocaleLowerCase('es'), category=$('#category-filter').value, sort=$('#sort-groups').value;
     refreshCategories();
     let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && (!category||String(g.category||'General')===category) && `${g.name} ${g.category} ${g.description} ${g.rules||''}`.toLocaleLowerCase('es').includes(q));
@@ -207,7 +208,7 @@
   });
   $('#remove-photo').addEventListener('click',()=>{photo.value='';processedPhoto='';$('#preview-wrap').hidden=true;refreshCreatePreview();});
   $('#close').addEventListener('click',()=>$('#dialog').close()); $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog'))$('#dialog').close();});
-  search.addEventListener('input',render);
+  search.addEventListener('input',()=>{clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(render,150);});
   $('#category-filter').addEventListener('change',render);$('#sort-groups').addEventListener('change',render);
   $('#favorites-filter').addEventListener('click',e=>{favoritesOnly=!favoritesOnly;e.currentTarget.setAttribute('aria-pressed',String(favoritesOnly));e.currentTarget.textContent=favoritesOnly?'♥ Guardados':'♡ Guardados';render();});
   ['name','category','description','rules','contactUrl'].forEach(name=>form.elements[name].addEventListener('input',refreshCreatePreview));
