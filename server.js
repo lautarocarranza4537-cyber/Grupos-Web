@@ -553,6 +553,45 @@ app.post('/api/groups/:id/rating', requireDatabase, requireSameOrigin, optionalA
   } catch (error) { next(error); }
 });
 
+app.patch('/api/groups/:id', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limitPosts, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  const name = cleanText(req.body && req.body.name, 70);
+  const category = cleanText(req.body && req.body.category, 32) || 'General';
+  const description = cleanText(req.body && req.body.description, 500);
+  const groupUrl = validPublicUrl(cleanText(req.body && req.body.groupUrl, 1000));
+  const groupUrlKey = groupUrl ? normalizeGroupUrl(groupUrl) : '';
+  const contactInput = cleanText(req.body && req.body.contactUrl, 100);
+  const contactUrl = validContactUrl(contactInput);
+  const hasImage = Object.prototype.hasOwnProperty.call(req.body || {}, 'imageData');
+  const imageData = hasImage && typeof req.body.imageData === 'string' ? req.body.imageData : '';
+  if (name.length < 2) return res.status(400).json({ error: 'El nombre debe tener al menos 2 caracteres.' });
+  if (description.length < 5) return res.status(400).json({ error: 'La descripción debe tener al menos 5 caracteres.' });
+  if (!groupUrl || !groupUrlKey) return res.status(400).json({ error: 'Ingresá un enlace público que empiece con http:// o https://.' });
+  if (contactInput && !contactUrl) return res.status(400).json({ error: 'El contacto debe ser un número de WhatsApp con código de país o un enlace wa.me válido.' });
+  if (hasImage && imageData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length > 2100000)) return res.status(400).json({ error: 'La foto no es válida o pesa demasiado. Probá con otra imagen.' });
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [groupUrlKey]);
+    const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 AND id<>$2 LIMIT 1', [groupUrlKey, id]);
+    if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
+    const result = await client.query(`UPDATE groups_public SET name=$1,category=$2,description=$3,
+      image_data=CASE WHEN $4 THEN NULLIF($5,'') ELSE image_data END, group_url=$6,group_url_key=$7,contact_url=NULLIF($8,'')
+      WHERE id=$9 AND owner_user_id=$10
+      RETURNING id,name,category,description,image_data,group_url,contact_url,created_at`,
+      [name,category,description,hasImage,imageData,groupUrl,groupUrlKey,contactUrl,id,req.user.id]);
+    if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Solo quien publicó este grupo puede editarlo.' }); }
+    await client.query('COMMIT');
+    const stats = await pool.query('SELECT ROUND(AVG(rating)::numeric,1) AS rating_average, COUNT(*)::int AS rating_count, COALESCE(MAX(CASE WHEN user_id=$2 THEN rating END),0)::int AS my_rating FROM group_ratings WHERE group_id=$1', [id,req.user.id]);
+    res.json({ ...result.rows[0], ...stats.rows[0], is_owner: true });
+  } catch (error) {
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
+    next(error);
+  } finally { if (client) client.release(); }
+});
+
 app.post('/api/groups/:id/delete', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   if (!id) return res.status(404).json({ error: 'No se encontró la publicación.' });
