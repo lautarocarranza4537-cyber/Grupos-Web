@@ -21,6 +21,7 @@ const SESSION_COOKIE = 'gw_session';
 const SESSION_DAYS = 30;
 const passwordAttempts = new Map();
 const postAttempts = new Map();
+const commentAttempts = new Map();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -74,6 +75,8 @@ async function initializeDatabase() {
         username VARCHAR(24) NOT NULL UNIQUE,
         password_salt TEXT NOT NULL,
         password_hash TEXT NOT NULL,
+        display_name VARCHAR(40),
+        avatar_data TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
@@ -86,6 +89,9 @@ async function initializeDatabase() {
         expires_at TIMESTAMPTZ NOT NULL
       )
     `);
+    await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS display_name VARCHAR(40)');
+    await pool.query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS avatar_data TEXT');
+    await pool.query('UPDATE app_users SET display_name=username WHERE display_name IS NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS app_sessions_expiry_idx ON app_sessions (expires_at)');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS groups_public (
@@ -105,6 +111,13 @@ async function initializeDatabase() {
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_url_key_idx ON groups_public (group_url_key)');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_owner_idx ON groups_public (owner_user_id)');
+    await pool.query(`CREATE TABLE IF NOT EXISTS group_comments (
+      id BIGSERIAL PRIMARY KEY, group_id BIGINT NOT NULL REFERENCES groups_public(id) ON DELETE CASCADE,
+      user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL,
+      display_name VARCHAR(40) NOT NULL, avatar_data TEXT, comment_text VARCHAR(500) NOT NULL,
+      is_anonymous BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+    await pool.query('CREATE INDEX IF NOT EXISTS group_comments_listing_idx ON group_comments (group_id, created_at DESC)');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS group_ratings (
         id BIGSERIAL PRIMARY KEY,
@@ -191,7 +204,7 @@ async function optionalAuth(req, res, next) {
   if (!/^[a-f0-9]{64}$/.test(raw)) return next();
   try {
     const result = await pool.query(`
-      SELECT u.id, u.username FROM app_sessions s JOIN app_users u ON u.id=s.user_id
+      SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS display_name, u.avatar_data FROM app_sessions s JOIN app_users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at>NOW() LIMIT 1
     `, [hashToken(raw)]);
     req.user = result.rows[0] || null;
@@ -247,7 +260,7 @@ function limited(req, res, next) {
 
 app.get('/health', (req, res) => res.status(dbReady ? 200 : 503).json({ ok: dbReady, database: dbReady ? 'ready' : 'waiting' }));
 
-app.get('/api/auth/me', requireDatabase, optionalAuth, (req, res) => res.json({ user: req.user ? { id: req.user.id, username: req.user.username } : null }));
+app.get('/api/auth/me', requireDatabase, optionalAuth, (req, res) => res.json({ user: req.user ? { id: req.user.id, username: req.user.username, display_name: req.user.display_name, avatar_data: req.user.avatar_data } : null }));
 
 async function createSession(userId, res) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -264,7 +277,7 @@ app.post('/api/auth/register', requireDatabase, requireSameOrigin, limited, asyn
   try {
     const salt = crypto.randomBytes(16).toString('hex');
     const derived = await scrypt(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-    const result = await pool.query('INSERT INTO app_users (username, password_salt, password_hash) VALUES ($1,$2,$3) RETURNING id, username', [username, salt, derived.toString('hex')]);
+    const result = await pool.query('INSERT INTO app_users (username, password_salt, password_hash, display_name) VALUES ($1,$2,$3,$1) RETURNING id, username, display_name, avatar_data', [username, salt, derived.toString('hex')]);
     await createSession(result.rows[0].id, res);
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
@@ -279,17 +292,28 @@ app.post('/api/auth/login', requireDatabase, requireSameOrigin, limited, async (
   const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
   if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length > 200) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
   try {
-    const result = await pool.query('SELECT id, username, password_salt, password_hash FROM app_users WHERE username=$1 LIMIT 1', [username]);
+    const result = await pool.query('SELECT id, username, display_name, avatar_data, password_salt, password_hash FROM app_users WHERE username=$1 LIMIT 1', [username]);
     if (!result.rowCount) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
     const user = result.rows[0];
     const derived = await scrypt(password, user.password_salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
     if (!safeEqualHex(derived.toString('hex'), user.password_hash)) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
     await createSession(user.id, res);
-    res.json({ user: { id: user.id, username: user.username } });
+    res.json({ user: { id: user.id, username: user.username, display_name: user.display_name || user.username, avatar_data: user.avatar_data || null } });
   } catch (error) {
     console.error('Error iniciando sesión:', error.message);
     res.status(500).json({ error: 'No se pudo iniciar sesión. Probá de nuevo.' });
   }
+});
+
+app.patch('/api/account/profile', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
+  const displayName = cleanText(req.body && req.body.displayName, 40);
+  const avatarData = typeof (req.body && req.body.avatarData) === 'string' ? req.body.avatarData : '';
+  if (displayName.length < 1) return res.status(400).json({ error: 'Elegí un nombre visible de 1 a 40 caracteres.' });
+  if (avatarData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarData) || avatarData.length > 250000)) return res.status(400).json({ error: 'La foto no es válida o pesa demasiado.' });
+  try {
+    const result = await pool.query('UPDATE app_users SET display_name=$1, avatar_data=$2 WHERE id=$3 RETURNING id, username, display_name, avatar_data', [displayName, avatarData || null, req.user.id]);
+    res.json({ user: result.rows[0] });
+  } catch (error) { next(error); }
 });
 
 app.post('/api/auth/logout', requireDatabase, requireSameOrigin, async (req, res) => {
@@ -347,6 +371,39 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
     console.error('Error publicando grupo:', error.message);
     next(error);
   } finally { if (client) client.release(); }
+});
+
+app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  try {
+    const result = await pool.query(`SELECT id, display_name, avatar_data, comment_text, is_anonymous, created_at
+      FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC LIMIT 100`, [id]);
+    res.json(result.rows);
+  } catch (error) { next(error); }
+});
+
+app.post('/api/groups/:id/comments', requireDatabase, requireSameOrigin, optionalAuth, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const text = cleanText(req.body && req.body.text, 500);
+  const identity = req.body && req.body.identity === 'profile' ? 'profile' : 'anonymous';
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  if (text.length < 2) return res.status(400).json({ error: 'Escribí un comentario de al menos 2 caracteres.' });
+  const key = req.ip || 'unknown', now = Date.now(); let attempt = commentAttempts.get(key);
+  if (!attempt || attempt.until < now) attempt = { count: 0, until: now + 60 * 60 * 1000 };
+  if (attempt.count >= 12) return res.status(429).json({ error: 'Llegaste al límite de comentarios por ahora. Probá más tarde.' });
+  attempt.count++; commentAttempts.set(key, attempt);
+  if (identity === 'profile' && !req.user) return res.status(401).json({ error: 'Iniciá sesión para comentar con tu perfil; también podés comentar como anónimo.' });
+  try {
+    const author = identity === 'profile' ? (req.user.display_name || req.user.username) : 'Anónimo';
+    const avatar = identity === 'profile' ? req.user.avatar_data : null;
+    const result = await pool.query(`INSERT INTO group_comments (group_id,user_id,display_name,avatar_data,comment_text,is_anonymous)
+      SELECT id,$2,$3,$4,$5,$6 FROM groups_public WHERE id=$1
+      RETURNING id, display_name, avatar_data, comment_text, is_anonymous, created_at`,
+      [id, identity === 'profile' ? req.user.id : null, author, avatar, text, identity === 'anonymous']);
+    if (!result.rowCount) return res.status(404).json({ error: 'Ese grupo ya no está publicado.' });
+    res.status(201).json(result.rows[0]);
+  } catch (error) { next(error); }
 });
 
 app.post('/api/groups/:id/rating', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
