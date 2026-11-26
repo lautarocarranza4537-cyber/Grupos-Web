@@ -117,6 +117,7 @@ async function initializeDatabase() {
       display_name VARCHAR(40) NOT NULL, avatar_data TEXT, comment_text VARCHAR(500) NOT NULL,
       is_anonymous BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
+    await pool.query('ALTER TABLE group_comments ADD COLUMN IF NOT EXISTS image_data TEXT');
     await pool.query('CREATE INDEX IF NOT EXISTS group_comments_listing_idx ON group_comments (group_id, created_at DESC)');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS group_ratings (
@@ -377,7 +378,7 @@ app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
   try {
-    const result = await pool.query(`SELECT id, display_name, avatar_data, comment_text, is_anonymous, created_at
+    const result = await pool.query(`SELECT id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at
       FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC LIMIT 100`, [id]);
     res.json(result.rows);
   } catch (error) { next(error); }
@@ -386,9 +387,11 @@ app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
 app.post('/api/groups/:id/comments', requireDatabase, requireSameOrigin, optionalAuth, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   const text = cleanText(req.body && req.body.text, 500);
+  const imageData = typeof (req.body && req.body.imageData) === 'string' ? req.body.imageData : '';
   const identity = req.body && req.body.identity === 'profile' ? 'profile' : 'anonymous';
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
-  if (text.length < 2) return res.status(400).json({ error: 'Escribí un comentario de al menos 2 caracteres.' });
+  if (!text && !imageData) return res.status(400).json({ error: 'Escribí un comentario o elegí una foto.' });
+  if (imageData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length > 600000)) return res.status(400).json({ error: 'La foto no es válida o pesa demasiado.' });
   const key = req.ip || 'unknown', now = Date.now(); let attempt = commentAttempts.get(key);
   if (!attempt || attempt.until < now) attempt = { count: 0, until: now + 60 * 60 * 1000 };
   if (attempt.count >= 12) return res.status(429).json({ error: 'Llegaste al límite de comentarios por ahora. Probá más tarde.' });
@@ -397,10 +400,10 @@ app.post('/api/groups/:id/comments', requireDatabase, requireSameOrigin, optiona
   try {
     const author = identity === 'profile' ? (req.user.display_name || req.user.username) : 'Anónimo';
     const avatar = identity === 'profile' ? req.user.avatar_data : null;
-    const result = await pool.query(`INSERT INTO group_comments (group_id,user_id,display_name,avatar_data,comment_text,is_anonymous)
-      SELECT id,$2,$3,$4,$5,$6 FROM groups_public WHERE id=$1
-      RETURNING id, display_name, avatar_data, comment_text, is_anonymous, created_at`,
-      [id, identity === 'profile' ? req.user.id : null, author, avatar, text, identity === 'anonymous']);
+    const result = await pool.query(`INSERT INTO group_comments (group_id,user_id,display_name,avatar_data,comment_text,is_anonymous,image_data)
+      SELECT id,$2,$3,$4,$5,$6,$7 FROM groups_public WHERE id=$1
+      RETURNING id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at`,
+      [id, identity === 'profile' ? req.user.id : null, author, avatar, text, identity === 'anonymous', imageData || null]);
     if (!result.rowCount) return res.status(404).json({ error: 'Ese grupo ya no está publicado.' });
     res.status(201).json(result.rows[0]);
   } catch (error) { next(error); }
