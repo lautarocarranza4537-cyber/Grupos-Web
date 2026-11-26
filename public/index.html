@@ -118,8 +118,8 @@
   const $ = (s) => document.querySelector(s);
   const grid = $('#grid'), status = $('#status'), empty = $('#empty'), count = $('#count');
   const form = $('#form'), search = $('#search'), photo = $('#photo'), feedback = $('#feedback'), submit = $('#submit');
-  let groups = [], processedPhoto = '', profilePhoto = '', commentPhoto = '', editPhoto = '', editPreviewGroup = null, showBlocked = false, currentUser = null, authMode = 'login', openCommentGroup = null, commentOffset = 0, commentTotal = 0, commentsLoading = false, commentRequest = 0, searchRenderTimer = 0;
-  const BLOCK_CONTACTS = 'gw-blocked-contacts-v1', BLOCK_IDS = 'gw-blocked-listings-v1', FAVORITES_KEY='gw-favorites-v1', RECENT_KEY='gw-recent-v1';
+  let groups = [], processedPhoto = '', profilePhoto = '', commentPhoto = '', editPhoto = '', editPreviewGroup = null, showBlocked = false, currentUser = null, authMode = 'login', openCommentGroup = null, commentOffset = 0, commentTotal = 0, commentsLoading = false, commentRequest = 0, searchRenderTimer = 0, filterPreferencesReady = false;
+  const BLOCK_CONTACTS = 'gw-blocked-contacts-v1', BLOCK_IDS = 'gw-blocked-listings-v1', FAVORITES_KEY='gw-favorites-v1', RECENT_KEY='gw-recent-v1', FILTERS_KEY='gw-directory-filters-v1';
   let favoritesOnly=false;
   const readList = key => { try { const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; } catch { return []; } };
   const writeList = (key,value) => { try { localStorage.setItem(key,JSON.stringify(value)); return true; } catch { return false; } };
@@ -132,6 +132,28 @@
   const refreshBlockedButton = () => { const b=$('#toggle-blocked'), n=readList(BLOCK_IDS).length+readList(BLOCK_CONTACTS).length; b.hidden=n===0; b.textContent=showBlocked?'Ocultar publicaciones bloqueadas':'Ver publicaciones bloqueadas'; };
   function refreshLanguages(){const sel=$('#language-filter'),current=sel.value,values=[...new Set(groups.map(g=>String(g.language||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));sel.replaceChildren(new Option('Todos los idiomas',''),new Option('Sin especificar','__none__'));for(const v of values)sel.add(new Option(v,`lang:${encodeURIComponent(v)}`));if([...sel.options].some(o=>o.value===current))sel.value=current;}
   function refreshResetButton(){const active=!!(search.value.trim()||$('#category-filter').value||$('#language-filter').value||$('#publication-filter').value||$('#sort-groups').value!=='newest'||favoritesOnly||showBlocked);$('#reset-filters').disabled=!active;}
+  function refreshFavoritesFilterButton(){const b=$('#favorites-filter');b.setAttribute('aria-pressed',String(favoritesOnly));b.textContent=favoritesOnly?'♥ Guardados':'♡ Guardados';}
+  function selectHasValue(select,value){return [...select.options].some(option=>option.value===value);}
+  function restoreFilterPreferences(){
+    refreshCategories();refreshLanguages();
+    try{
+      const saved=JSON.parse(localStorage.getItem(FILTERS_KEY)||'null');
+      if(saved&&typeof saved==='object'&&!Array.isArray(saved)){
+        if(typeof saved.query==='string')search.value=saved.query;
+        const values=[['category-filter',saved.category],['language-filter',saved.language],['publication-filter',saved.publicationStatus],['sort-groups',saved.sort]];
+        for(const [id,value] of values){const select=$(`#${id}`);if(typeof value==='string'&&selectHasValue(select,value))select.value=value;}
+        favoritesOnly=saved.favoritesOnly===true;showBlocked=saved.showBlocked===true;
+      }
+    }catch{}
+    refreshFavoritesFilterButton();
+  }
+  function saveFilterPreferences(){
+    if(!filterPreferencesReady)return;
+    const preferences={query:search.value,category:$('#category-filter').value,language:$('#language-filter').value,publicationStatus:$('#publication-filter').value,sort:$('#sort-groups').value,favoritesOnly,showBlocked};
+    const active=!!(preferences.query.trim()||preferences.category||preferences.language||preferences.publicationStatus||preferences.sort!=='newest'||favoritesOnly||showBlocked);
+    try{if(active)localStorage.setItem(FILTERS_KEY,JSON.stringify(preferences));else localStorage.removeItem(FILTERS_KEY);}catch{}
+  }
+  function clearFilterPreferences(){try{localStorage.removeItem(FILTERS_KEY);}catch{}}
   const fallback = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="450"><rect width="100%" height="100%" fill="#23283a"/><text x="50%" y="52%" text-anchor="middle" fill="#aeb5c7" font-family="sans-serif" font-size="24">GRUPO</text></svg>');
   const esc = (s='') => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const safeUrl = s => { try { const u = new URL(s); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
@@ -151,7 +173,7 @@
     try {
       const r = await fetch('/api/groups');
       if (!r.ok) { let d={}; try { d=await r.json(); } catch {} throw new Error(d.error || 'No se pudo conectar con la base de datos.'); }
-      groups = await r.json(); refreshSearchSuggestions(); status.hidden=true; render();const pathMatch=location.pathname.match(/^\/grupo\/(\d+)\/?$/),hashMatch=location.hash.match(/^#grupo-(\d+)$/),match=pathMatch||hashMatch;if(match){let g=groups.find(x=>String(x.id)===match[1]);if(!g&&pathMatch){const detail=await fetch(`/api/groups/${encodeURIComponent(match[1])}`);if(detail.ok)g=await detail.json();}if(g&&!$('#dialog').open)openGroup(g);}
+      groups = await r.json(); refreshSearchSuggestions(); refreshCategories(); refreshLanguages(); restoreFilterPreferences(); filterPreferencesReady=true; status.hidden=true; render();const pathMatch=location.pathname.match(/^\/grupo\/(\d+)\/?$/),hashMatch=location.hash.match(/^#grupo-(\d+)$/),match=pathMatch||hashMatch;if(match){let g=groups.find(x=>String(x.id)===match[1]);if(!g&&pathMatch){const detail=await fetch(`/api/groups/${encodeURIComponent(match[1])}`);if(detail.ok)g=await detail.json();}if(g&&!$('#dialog').open)openGroup(g);}
     } catch (e) { status.textContent=e.message; status.classList.add('error'); count.textContent='Sin conexión'; }
   }
   const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
@@ -169,7 +191,7 @@
     const selectedLanguage=languageFilter.startsWith('lang:')?decodeURIComponent(languageFilter.slice(5)):'';
     let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && (!category||String(g.category||'General')===category) && (!languageFilter||(languageFilter==='__none__'?!String(g.language||'').trim():String(g.language||'').trim()===selectedLanguage)) && (!publicationFilter||String(g.publication_status||'active')===publicationFilter) && normalizeSearch(`${g.name} ${g.category} ${String(g.language||'').trim()||'Sin especificar'} ${g.description} ${g.rules||''} ${g.publication_status==='closed'?'cerrado cerrada cerrado a nuevos miembros':'abierto abierta abierto a nuevos miembros'}`).includes(q));
     const recent=readList(RECENT_KEY); result.sort((a,b)=> sort==='rating'?(Number(b.rating_average||0)-Number(a.rating_average||0)):sort==='rated'?(Number(b.rating_count||0)-Number(a.rating_count||0)):sort==='name'?String(a.name).localeCompare(String(b.name),'es'):sort==='recent'?(recent.indexOf(String(a.id))<0?1:recent.indexOf(String(b.id))<0?-1:recent.indexOf(String(a.id))-recent.indexOf(String(b.id))):new Date(b.created_at||0)-new Date(a.created_at||0));
-    refreshBlockedButton(); refreshResetButton();
+    refreshBlockedButton(); refreshResetButton(); refreshFavoritesFilterButton(); saveFilterPreferences();
     count.textContent=`${result.length} ${result.length===1?'grupo':'grupos'}`;
     grid.replaceChildren(); empty.hidden=result.length>0;
     if (!result.length && groups.length && (q||category||languageFilter||publicationFilter||favoritesOnly)) { empty.hidden=false; empty.querySelector('h3').textContent=favoritesOnly&&!readList(FAVORITES_KEY).length?'Todavía no guardaste grupos':'No encontramos resultados'; empty.querySelector('p').textContent=favoritesOnly&&!readList(FAVORITES_KEY).length?'Tocá el corazón de una publicación para guardarla.':'Probá cambiar los filtros o el texto de búsqueda.'; }
@@ -255,8 +277,8 @@
   $('#close').addEventListener('click',()=>$('#dialog').close()); $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog'))$('#dialog').close();});
   search.addEventListener('input',()=>{clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(render,150);});
   $('#category-filter').addEventListener('change',render);$('#language-filter').addEventListener('change',render);$('#publication-filter').addEventListener('change',render);$('#sort-groups').addEventListener('change',render);
-  $('#favorites-filter').addEventListener('click',e=>{favoritesOnly=!favoritesOnly;e.currentTarget.setAttribute('aria-pressed',String(favoritesOnly));e.currentTarget.textContent=favoritesOnly?'♥ Guardados':'♡ Guardados';render();});
-  $('#reset-filters').addEventListener('click',()=>{search.value='';$('#category-filter').value='';$('#language-filter').value='';$('#publication-filter').value='';$('#sort-groups').value='newest';favoritesOnly=false;showBlocked=false;const favorites=$('#favorites-filter');favorites.setAttribute('aria-pressed','false');favorites.textContent='♡ Guardados';render();$('#filter-feedback').textContent='Filtros restablecidos. Las listas de guardados y bloqueados no se modificaron.';});
+  $('#favorites-filter').addEventListener('click',()=>{favoritesOnly=!favoritesOnly;render();});
+  $('#reset-filters').addEventListener('click',()=>{search.value='';$('#category-filter').value='';$('#language-filter').value='';$('#publication-filter').value='';$('#sort-groups').value='newest';favoritesOnly=false;showBlocked=false;render();clearFilterPreferences();$('#filter-feedback').textContent='Filtros restablecidos. Las listas de guardados y bloqueados no se modificaron.';});
   ['name','category','language','description','rules','contactUrl'].forEach(name=>form.elements[name].addEventListener('input',refreshCreatePreview));form.elements.publicationStatus.addEventListener('change',refreshCreatePreview);
   const createDuplicateFeedback=$('#create-duplicate-feedback');
   ['input','change'].forEach(event=>form.elements.groupUrl.addEventListener(event,()=>refreshDuplicateUrlFeedback(form.elements.groupUrl,createDuplicateFeedback)));
