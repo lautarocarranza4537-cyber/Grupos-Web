@@ -53,6 +53,8 @@ Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de 
 - El contacto opcional de WhatsApp sigue siendo público. El bloqueo anterior solo oculta publicaciones localmente en ese navegador; no bloquea mensajes de WhatsApp.
 - Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. Las migraciones son aditivas y no borran grupos ni votos.
 
+En la ficha de cada grupo se sugieren hasta cuatro publicaciones públicas de la misma categoría, sin incluir el grupo actual ni publicaciones ocultas. La lista se consulta de forma acotada y solo expone identificador, nombre y categoría.
+
 Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud, limitan la frecuencia de publicaciones e intentos de cuenta y verifican acciones por sesión. El directorio es público y cualquiera puede ver sus perfiles. Los comentarios anónimos siguen siendo públicos, pero solo una cuenta que publicó un comentario con su perfil puede editarlo o borrarlo; las respuestas requieren iniciar sesión, se limitan a un nivel y quedan asociadas al grupo y al comentario raíz. Borrar un comentario raíz también borra sus respuestas. Se pueden denunciar publicaciones/grupos y comentarios individuales; las denuncias no son públicas y no incluyen información del denunciante en la cola privada. La cola de moderación permanece deshabilitada hasta que el responsable configure un secreto seguro.
 
 
