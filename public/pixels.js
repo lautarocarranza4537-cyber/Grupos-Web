@@ -7,7 +7,8 @@
     .topbar{z-index:5}
     .gw-reveal{opacity:0;transform:translateY(18px);transition:opacity .65s ease,transform .65s cubic-bezier(.2,.7,.2,1)}
     .gw-reveal.gw-visible{opacity:1;transform:translateY(0)}
-    .card.gw-reveal{transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),box-shadow .2s}
+    .card.gw-reveal{transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),box-shadow .25s,border-color .25s}
+    .card.gw-reveal.gw-visible:hover,.card.gw-reveal.gw-visible:focus-visible{transform:translateY(-6px)}
     .hero-copy.gw-reveal{transition-delay:.08s}
     .publish-intro.gw-reveal{transition-delay:.06s}
     .gw-pixel-canvas{animation:gwCanvasIn 1.2s ease both}
@@ -72,14 +73,26 @@
       ctx.fillStyle = `rgba(${b.color},${alpha})`;
       ctx.fillRect(Math.round(b.x + b.vx * age * 36), Math.round(b.y + b.vy * age * 36), b.size, b.size);
     }
-    requestAnimationFrame(draw);
+    if (!reduceMotion) requestAnimationFrame(draw);
   }
   const bursts = [];
   requestAnimationFrame(draw);
 
   if (!reduceMotion) {
+    let lastScrollBurst = 0;
+    window.addEventListener('scroll', () => {
+      const now = performance.now();
+      if (now - lastScrollBurst < 180 || bursts.length > 100) return;
+      lastScrollBurst = now;
+      for (let i = 0; i < 3; i++) bursts.push({
+        x: rand(0, width), y: rand(height * .3, height * .9),
+        vx: rand(-.7, .7), vy: rand(-1.5, -.3), size: rand(2, 4),
+        color: palette[Math.floor(Math.random() * 2)], start: now, life: rand(500, 900)
+      });
+    }, { passive: true });
     window.addEventListener('pointerdown', event => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
+      if (bursts.length > 100) return;
       const amount = isSmall ? 7 : 11;
       for (let i = 0; i < amount; i++) bursts.push({
         x: event.clientX, y: event.clientY,

@@ -27,7 +27,15 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 let dbReady = false;
+let initializing = false;
+if (pool) pool.on('error', error => {
+  dbReady = false;
+  console.error('PostgreSQL perdió la conexión:', error.message);
+});
 async function initializeDatabase() {
+  if (initializing || dbReady) return;
+  initializing = true;
+  try {
   if (!pool) {
     console.error('DATABASE_URL no está configurada. Conectá PostgreSQL en Render.');
     return;
@@ -49,6 +57,7 @@ async function initializeDatabase() {
   } catch (error) {
     console.error('No se pudo preparar PostgreSQL:', error.message);
   }
+  } finally { initializing = false; }
 }
 
 function requireDatabase(req, res, next) {
@@ -92,6 +101,7 @@ app.get('/api/groups', requireDatabase, async (req, res) => {
     `);
     res.json(result.rows);
   } catch (error) {
+    dbReady = false;
     console.error('Error leyendo grupos:', error.message);
     res.status(500).json({ error: 'No se pudieron cargar los grupos.' });
   }
@@ -119,6 +129,7 @@ app.post('/api/groups', requireDatabase, limitPosts, async (req, res) => {
     `, [name, category, description, imageData || null, groupUrl]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
+    dbReady = false;
     console.error('Error publicando grupo:', error.message);
     res.status(500).json({ error: 'No se pudo publicar el grupo. Probá de nuevo.' });
   }
@@ -133,4 +144,5 @@ app.use((err, req, res, next) => {
 app.listen(port, () => {
   console.log(`Grupos-Web escuchando en el puerto ${port}`);
   initializeDatabase();
+  if (pool) setInterval(initializeDatabase, 15000).unref();
 });
