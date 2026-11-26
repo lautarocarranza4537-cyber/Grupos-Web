@@ -2,12 +2,14 @@
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { Pool } = require('pg');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const publicIndexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({
   connectionString: databaseUrl,
@@ -43,6 +45,21 @@ app.use((req, res, next) => {
   res.setHeader('Cache-Control', req.path.startsWith('/api/') ? 'no-store' : 'public, max-age=0, must-revalidate');
   next();
 });
+// Generate a current public sitemap before static middleware so it includes shareable group pages.
+app.get('/sitemap.xml', async (req, res, next) => {
+  if (!pool || !dbReady) return res.sendFile(path.join(__dirname, 'public', 'sitemap.xml'));
+  try {
+    const result = await pool.query(`SELECT id, created_at FROM groups_public WHERE moderation_hidden=FALSE ORDER BY id DESC LIMIT 5000`);
+    const urls = result.rows.map(row => {
+      const id = String(row.id);
+      if (!/^\d+$/.test(id)) return '';
+      const date = row.created_at instanceof Date ? row.created_at.toISOString().slice(0, 10) : '';
+      return `  <url><loc>https://grupos-web.onrender.com/grupo/${id}</loc>${/^\d{4}-\d{2}-\d{2}$/.test(date) ? `<lastmod>${date}</lastmod>` : ''}<changefreq>weekly</changefreq><priority>0.7</priority></url>`;
+    }).filter(Boolean);
+    res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://grupos-web.onrender.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n${urls.join('\n')}\n</urlset>`);
+  } catch (error) { next(error); }
+});
+
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 let dbReady = false;
@@ -291,6 +308,36 @@ function limited(req, res, next) {
 
 app.get('/health', (req, res) => res.status(dbReady ? 200 : 503).json({ ok: dbReady, database: dbReady ? 'ready' : 'waiting' }));
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' })[char]);
+}
+function groupPageHtml(group) {
+  const title = `${group.name} | Grupo de WhatsApp en Grupos Web`;
+  const description = String(group.description || '').replace(/\s+/g, ' ').trim().slice(0, 300) || 'Descubrí esta comunidad de WhatsApp en Grupos Web.';
+  const canonical = `https://grupos-web.onrender.com/grupo/${group.id}`;
+  const jsonLd = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', name: title, description, url: canonical, inLanguage: 'es-AR', isPartOf: { '@type': 'WebSite', name: 'Grupos Web', url: 'https://grupos-web.onrender.com/' } })
+    .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  let html = publicIndexHtml;
+  html = html.replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escapeHtml(description)}">`);
+  html = html.replace(/<link rel="canonical" href="[^"]*">/, () => `<link rel="canonical" href="${canonical}">`);
+  html = html.replace(/<meta property="og:title" content="[^"]*">/, () => `<meta property="og:title" content="${escapeHtml(title)}">`);
+  html = html.replace(/<meta property="og:description" content="[^"]*">/, () => `<meta property="og:description" content="${escapeHtml(description)}">`);
+  html = html.replace(/<meta property="og:url" content="[^"]*">/, () => `<meta property="og:url" content="${canonical}">`);
+  html = html.replace(/<meta name="twitter:card" content="[^"]*">/, () => '<meta name="twitter:card" content="summary">');
+  html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
+  return html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${jsonLd}</script>`);
+}
+
+app.get('/grupo/:id', requireDatabase, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(404).type('text').send('No se encontró la publicación.');
+  try {
+    const result = await pool.query('SELECT id, name, category, description FROM groups_public WHERE id=$1 AND moderation_hidden=FALSE LIMIT 1', [id]);
+    if (!result.rowCount) return res.status(404).type('text').send('No se encontró la publicación.');
+    res.type('html').send(groupPageHtml(result.rows[0]));
+  } catch (error) { next(error); }
+});
+
 app.get('/api/auth/me', requireDatabase, optionalAuth, (req, res) => res.json({ user: req.user ? { id: req.user.id, username: req.user.username, display_name: req.user.display_name, avatar_data: req.user.avatar_data } : null }));
 
 async function createSession(userId, res) {
@@ -428,6 +475,24 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
     console.error('Error publicando grupo:', error.message);
     next(error);
   } finally { if (client) client.release(); }
+});
+
+app.get('/api/groups/:id', requireDatabase, optionalAuth, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(404).json({ error: 'No se encontró la publicación.' });
+  try {
+    const result = await pool.query(`
+      SELECT g.id, g.name, g.category, g.description, g.image_data, g.group_url, g.contact_url, g.created_at,
+             ROUND(AVG(r.rating)::numeric, 1) AS rating_average, COUNT(r.id)::int AS rating_count,
+             COALESCE(MAX(CASE WHEN r.user_id=$2 THEN r.rating END),0)::int AS my_rating,
+             (g.owner_user_id=$2) AS is_owner
+      FROM groups_public g LEFT JOIN group_ratings r ON r.group_id=g.id
+      WHERE g.id=$1 AND g.moderation_hidden=FALSE
+      GROUP BY g.id LIMIT 1
+    `, [id, req.user ? req.user.id : null]);
+    if (!result.rowCount) return res.status(404).json({ error: 'No se encontró la publicación.' });
+    res.json(result.rows[0]);
+  } catch (error) { next(error); }
 });
 
 app.get('/api/groups/:id/comments', requireDatabase, optionalAuth, async (req, res, next) => {

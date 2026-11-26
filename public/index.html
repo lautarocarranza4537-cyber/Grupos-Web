@@ -53,12 +53,14 @@
     @keyframes commentIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes dialogIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes bodyIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){.comment-item{animation:none!important}.dialog[open],.dialog[open] .dialog-body{animation:none!important}.action-button{transition:none}}
   
+    .skip-link{position:absolute;left:12px;top:-80px;z-index:20;padding:10px 14px;border-radius:6px;background:#d4ff63;color:#141824;font-weight:700}.skip-link:focus{top:12px} :focus-visible{outline:3px solid #d4ff63!important;outline-offset:3px}
     .report-form{display:grid;gap:12px;margin-top:12px;padding:14px;border:1px solid #ffffff1a;border-radius:10px;background:#171b26}.field select{width:100%;background:#171b26;border:1px solid #303544;border-radius:6px;color:white;padding:12px 13px;font:12px var(--sans)}.report-feedback{font-size:12px;color:#d4ff63;min-height:1.2em}
 
     .password-form{display:grid;gap:12px;margin:16px 0;padding:14px;border:1px solid #ffffff1a;border-radius:10px;background:#171b26}.password-form strong{font-size:13px}.password-feedback{font-size:12px;color:#d4ff63;min-height:1.2em}
 </style>
 </head>
 <body>
+  <a class="skip-link" href="#explorar">Saltar al directorio</a>
   <header class="topbar"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><div><a class="top-link" href="#publicar">Publicar un grupo ↗</a><button class="account-button" id="account-button" type="button">Entrar / crear cuenta</button></div></header>
   <main id="inicio">
     <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> COMUNIDADES PARA ENCONTRARTE</div><h1>Tu próxima<br><span>comunidad</span> de WhatsApp.</h1><p>Encontrá grupos de WhatsApp para unirte, explorá comunidades por tus intereses y compartí la tuya.</p><a class="button button-primary" href="#explorar">Explorar grupos <span>↓</span></a></div><div class="hero-art" aria-hidden="true"><div class="orb one"></div><div class="orb two"></div><div class="orbit"></div><div class="orbit alt"></div><div class="hero-g">G</div><div class="float-tag tag-a">✦ gente nueva</div><div class="float-tag tag-b">● comunidad</div></div><div class="hero-bottom"><span>UN LUGAR PARA CADA INTERÉS</span><span class="hero-line"></span><span>01 — 03</span></div></section>
@@ -101,7 +103,7 @@
     try {
       const r = await fetch('/api/groups');
       if (!r.ok) { let d={}; try { d=await r.json(); } catch {} throw new Error(d.error || 'No se pudo conectar con la base de datos.'); }
-      groups = await r.json(); status.hidden=true; render();const match=location.hash.match(/^#grupo-(\d+)$/);if(match){const g=groups.find(x=>String(x.id)===match[1]);if(g&&!$('#dialog').open)openGroup(g);}
+      groups = await r.json(); status.hidden=true; render();const pathMatch=location.pathname.match(/^\/grupo\/(\d+)\/?$/),hashMatch=location.hash.match(/^#grupo-(\d+)$/),match=pathMatch||hashMatch;if(match){let g=groups.find(x=>String(x.id)===match[1]);if(!g&&pathMatch){const detail=await fetch(`/api/groups/${encodeURIComponent(match[1])}`);if(detail.ok)g=await detail.json();}if(g&&!$('#dialog').open)openGroup(g);}
     } catch (e) { status.textContent=e.message; status.classList.add('error'); count.textContent='Sin conexión'; }
   }
   function render() {
@@ -132,7 +134,7 @@
     $('#dialog-link').href=safeUrl(g.group_url)||'#';
     syncFavoriteButton(g);
     $('#favorite-group').onclick=()=>toggleFavorite(g);
-    $('#share-group').onclick=async()=>{const url=`${location.origin}/#grupo-${encodeURIComponent(g.id)}`;try{if(navigator.share)await navigator.share({title:g.name,text:g.description,url});else{await navigator.clipboard.writeText(url);$('#share-group').textContent='Enlace copiado';setTimeout(()=>$('#share-group').textContent='Compartir grupo',1800);}}catch(err){if(err.name!=='AbortError')alert('No se pudo compartir el enlace.');}};
+    $('#share-group').onclick=async()=>{const url=`${location.origin}/grupo/${encodeURIComponent(g.id)}`;try{if(navigator.share)await navigator.share({title:g.name,text:g.description,url});else{await navigator.clipboard.writeText(url);$('#share-group').textContent='Enlace copiado';setTimeout(()=>$('#share-group').textContent='Compartir grupo',1800);}}catch(err){if(err.name!=='AbortError')alert('No se pudo compartir el enlace.');}};
     const contact=$('#dialog-contact'), safeContact=safeUrl(g.contact_url); contact.hidden=!safeContact; if(safeContact)contact.href=safeContact;
     $('#delete-group').hidden=!(currentUser && g.is_owner);$('#edit-group-toggle').hidden=!(currentUser && g.is_owner);$('#edit-group-form').hidden=true;$('#edit-group-feedback').textContent='';$('#edit-group-form').reset();editPhoto='';$('#edit-group-photo').value='';
     $('#report-form').hidden=true;$('#report-form').reset();$('#report-toggle').setAttribute('aria-expanded','false');$('#report-feedback').textContent='';
