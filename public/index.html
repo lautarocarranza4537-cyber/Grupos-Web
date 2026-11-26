@@ -120,11 +120,12 @@
       groups = await r.json(); status.hidden=true; render();const pathMatch=location.pathname.match(/^\/grupo\/(\d+)\/?$/),hashMatch=location.hash.match(/^#grupo-(\d+)$/),match=pathMatch||hashMatch;if(match){let g=groups.find(x=>String(x.id)===match[1]);if(!g&&pathMatch){const detail=await fetch(`/api/groups/${encodeURIComponent(match[1])}`);if(detail.ok)g=await detail.json();}if(g&&!$('#dialog').open)openGroup(g);}
     } catch (e) { status.textContent=e.message; status.classList.add('error'); count.textContent='Sin conexión'; }
   }
+  const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
   function render() {
     clearTimeout(searchRenderTimer); searchRenderTimer=0;
-    const q=search.value.trim().toLocaleLowerCase('es'), category=$('#category-filter').value, publicationFilter=$('#publication-filter').value, sort=$('#sort-groups').value;
+    const q=normalizeSearch(search.value.trim()), category=$('#category-filter').value, publicationFilter=$('#publication-filter').value, sort=$('#sort-groups').value;
     refreshCategories();
-    let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && (!category||String(g.category||'General')===category) && (!publicationFilter||String(g.publication_status||'active')===publicationFilter) && `${g.name} ${g.category} ${g.description} ${g.rules||''} ${g.publication_status==='closed'?'cerrado cerrada cerrado a nuevos miembros':'abierto abierta abierto a nuevos miembros'}`.toLocaleLowerCase('es').includes(q));
+    let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && (!category||String(g.category||'General')===category) && (!publicationFilter||String(g.publication_status||'active')===publicationFilter) && normalizeSearch(`${g.name} ${g.category} ${g.description} ${g.rules||''} ${g.publication_status==='closed'?'cerrado cerrada cerrado a nuevos miembros':'abierto abierta abierto a nuevos miembros'}`).includes(q));
     const recent=readList(RECENT_KEY); result.sort((a,b)=> sort==='rating'?(Number(b.rating_average||0)-Number(a.rating_average||0)):sort==='rated'?(Number(b.rating_count||0)-Number(a.rating_count||0)):sort==='name'?String(a.name).localeCompare(String(b.name),'es'):sort==='recent'?(recent.indexOf(String(a.id))<0?1:recent.indexOf(String(b.id))<0?-1:recent.indexOf(String(a.id))-recent.indexOf(String(b.id))):new Date(b.created_at||0)-new Date(a.created_at||0));
     refreshBlockedButton(); refreshResetButton();
     count.textContent=`${result.length} ${result.length===1?'grupo':'grupos'}`;

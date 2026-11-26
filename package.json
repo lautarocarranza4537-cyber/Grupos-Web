@@ -5,7 +5,8 @@
   "description": "Directorio público de grupos y comunidades",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:search": "node tests/search-normalization.test.js"
   },
   "engines": {
     "node": ">=20"

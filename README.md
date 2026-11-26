@@ -53,7 +53,7 @@ Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de 
 - El contacto opcional de WhatsApp sigue siendo público. El bloqueo anterior solo oculta publicaciones localmente en ese navegador; no bloquea mensajes de WhatsApp.
 - Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. Las migraciones son aditivas y no borran grupos ni votos.
 
-El directorio permite filtrar por categoría y estado (abierto/cerrado), ordenar los resultados y ver solo los grupos guardados en este navegador. El botón «Restablecer filtros» devuelve la búsqueda y los filtros a sus valores iniciales; no borra favoritos ni cambia la lista local de publicaciones bloqueadas.
+El directorio permite buscar por nombre, categoría, descripción, reglas y estado, incluso si escribís sin tildes; también permite filtrar por categoría y estado (abierto/cerrado), ordenar los resultados y ver solo los grupos guardados en este navegador. El botón «Restablecer filtros» devuelve la búsqueda y los filtros a sus valores iniciales; no borra favoritos ni cambia la lista local de publicaciones bloqueadas.
 
 En la ficha de cada grupo se sugieren hasta cuatro publicaciones públicas de la misma categoría, sin incluir el grupo actual ni publicaciones ocultas. La lista se consulta de forma acotada y solo expone identificador, nombre y categoría.
 
