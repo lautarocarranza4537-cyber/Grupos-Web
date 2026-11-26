@@ -174,6 +174,22 @@ async function initializeDatabase() {
       try { await resetClient.query('ROLLBACK'); } catch {}
       throw error;
     } finally { resetClient.release(); }
+    // Clean up only the two isolated test accounts created by the developer.
+    const cleanupClient = await pool.connect();
+    try {
+      await cleanupClient.query('BEGIN');
+      await cleanupClient.query("SELECT pg_advisory_xact_lock(hashtext('gw_comments_test_cleanup_20261126')::bigint)");
+      const done = await cleanupClient.query("SELECT name FROM app_migrations WHERE name='gw_comments_test_cleanup_20261126'");
+      if (!done.rowCount) {
+        const removed = await cleanupClient.query(`DELETE FROM app_users u WHERE u.username IN ('gwtest_d80fc08d74', 'gwui_8b8a0d29f9') AND NOT EXISTS (SELECT 1 FROM groups_public g WHERE g.owner_user_id=u.id) RETURNING u.id`);
+        await cleanupClient.query("INSERT INTO app_migrations(name) VALUES ('gw_comments_test_cleanup_20261126')");
+        console.log('Cuentas técnicas de prueba limpiadas:', removed.rowCount);
+      }
+      await cleanupClient.query('COMMIT');
+    } catch (error) {
+      try { await cleanupClient.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally { cleanupClient.release(); }
     dbReady = true;
     console.log('PostgreSQL listo.');
   } catch (error) {
