@@ -4,7 +4,7 @@ Directorio público para buscar y publicar grupos. Incluye perfil del grupo, fot
 
 ## Cómo se guardan las fotos y publicaciones
 
-Las fotos se reducen en el navegador y quedan almacenadas como datos de imagen junto a la publicación en PostgreSQL. El código crea la tabla automáticamente al iniciar. Por eso la web necesita una base PostgreSQL persistente conectada por `DATABASE_URL`; no guardes publicaciones en el disco efímero del servicio web.
+Las fotos se reducen en el navegador y quedan almacenadas como datos de imagen junto a la publicación en PostgreSQL. Cada publicación también puede incluir reglas o detalles públicos opcionales (hasta 1.200 caracteres), editables por quien la publicó. El código crea la tabla y aplica migraciones aditivas automáticamente al iniciar. Por eso la web necesita una base PostgreSQL persistente conectada por `DATABASE_URL`; no guardes publicaciones en el disco efímero del servicio web.
 
 ## Antes de desplegar
 
