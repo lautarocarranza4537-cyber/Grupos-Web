@@ -141,7 +141,7 @@ function requireSameOrigin(req, res, next) {
 }
 function hashToken(value) { return crypto.createHash('sha256').update(value, 'utf8').digest('hex'); }
 function safeEqualHex(a, b) {
-  if (!/^[a-f0-9]{64}$/.test(a || '') || !/^[a-f0-9]{64}$/.test(b || '')) return false;
+  if (!/^[a-f0-9]{128}$/.test(a || '') || !/^[a-f0-9]{128}$/.test(b || '')) return false;
   return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
 }
 function cookieOptions() {
