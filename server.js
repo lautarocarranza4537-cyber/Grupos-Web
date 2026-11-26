@@ -128,6 +128,13 @@ async function initializeDatabase() {
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_token_hash TEXT');
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS contact_url TEXT');
     await pool.query("ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS rules VARCHAR(1200) NOT NULL DEFAULT ''");
+    // Legacy publications remain open by default; status can only be active or closed.
+    await pool.query("ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS publication_status VARCHAR(12) NOT NULL DEFAULT 'active'");
+    await pool.query(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='groups_public_publication_status_check' AND conrelid='groups_public'::regclass) THEN
+        ALTER TABLE groups_public ADD CONSTRAINT groups_public_publication_status_check CHECK (publication_status IN ('active','closed'));
+      END IF;
+    END $$`);
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_url_key_idx ON groups_public (group_url_key)');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_owner_idx ON groups_public (owner_user_id)');
@@ -444,7 +451,7 @@ app.post('/api/auth/logout', requireDatabase, requireSameOrigin, async (req, res
 app.get('/api/groups', requireDatabase, optionalAuth, async (req, res, next) => {
   try {
     const result = await pool.query(`
-      SELECT g.id, g.name, g.category, g.description, g.rules, g.image_data, g.group_url, g.contact_url, g.created_at,
+      SELECT g.id, g.name, g.category, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
              ROUND(AVG(r.rating)::numeric, 1) AS rating_average,
              COUNT(r.id)::int AS rating_count,
              COALESCE(MAX(CASE WHEN r.user_id=$1 THEN r.rating END),0)::int AS my_rating,
@@ -462,11 +469,13 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
   const category = cleanText(req.body && req.body.category, 32) || 'General';
   const description = cleanText(req.body && req.body.description, 500);
   const rules = cleanText(req.body && req.body.rules, 1200);
+  const publicationStatus = req.body && req.body.publicationStatus !== undefined ? req.body.publicationStatus : 'active';
   const groupUrl = validPublicUrl(cleanText(req.body && req.body.groupUrl, 1000));
   const groupUrlKey = groupUrl ? normalizeGroupUrl(groupUrl) : '';
   const imageData = typeof (req.body && req.body.imageData) === 'string' ? req.body.imageData : '';
   const contactInput = cleanText(req.body && req.body.contactUrl, 100);
   const contactUrl = validContactUrl(contactInput);
+  if (!['active','closed'].includes(publicationStatus)) return res.status(400).json({ error: 'Elegí si el grupo está abierto o cerrado a nuevos miembros.' });
   if (name.length < 2) return res.status(400).json({ error: 'El nombre debe tener al menos 2 caracteres.' });
   if (description.length < 5) return res.status(400).json({ error: 'La descripción debe tener al menos 5 caracteres.' });
   if (!groupUrl || !groupUrlKey) return res.status(400).json({ error: 'Ingresá un enlace público que empiece con http:// o https://.' });
@@ -480,10 +489,10 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
     const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 LIMIT 1', [groupUrlKey]);
     if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
     const result = await client.query(`
-      INSERT INTO groups_public (name, category, description, rules, image_data, group_url, group_url_key, contact_url, owner_user_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING id, name, category, description, rules, image_data, group_url, contact_url, created_at
-    `, [name, category, description, rules, imageData || null, groupUrl, groupUrlKey, contactUrl || null, req.user.id]);
+      INSERT INTO groups_public (name, category, description, rules, publication_status, image_data, group_url, group_url_key, contact_url, owner_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING id, name, category, description, rules, publication_status, image_data, group_url, contact_url, created_at
+    `, [name, category, description, rules, publicationStatus, imageData || null, groupUrl, groupUrlKey, contactUrl || null, req.user.id]);
     await client.query('COMMIT');
     res.status(201).json({ ...result.rows[0], rating_average: null, rating_count: 0, my_rating: 0, is_owner: true });
   } catch (error) {
@@ -498,7 +507,7 @@ app.get('/api/groups/:id', requireDatabase, optionalAuth, async (req, res, next)
   if (!id) return res.status(404).json({ error: 'No se encontró la publicación.' });
   try {
     const result = await pool.query(`
-      SELECT g.id, g.name, g.category, g.description, g.rules, g.image_data, g.group_url, g.contact_url, g.created_at,
+      SELECT g.id, g.name, g.category, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
              ROUND(AVG(r.rating)::numeric, 1) AS rating_average, COUNT(r.id)::int AS rating_count,
              COALESCE(MAX(CASE WHEN r.user_id=$2 THEN r.rating END),0)::int AS my_rating,
              (g.owner_user_id=$2) AS is_owner
@@ -730,12 +739,15 @@ app.patch('/api/groups/:id', requireDatabase, requireSameOrigin, optionalAuth, r
   const category = cleanText(req.body && req.body.category, 32) || 'General';
   const description = cleanText(req.body && req.body.description, 500);
   const rules = cleanText(req.body && req.body.rules, 1200);
+  const hasPublicationStatus = Object.prototype.hasOwnProperty.call(req.body || {}, 'publicationStatus');
+  const publicationStatus = hasPublicationStatus ? req.body.publicationStatus : null;
   const groupUrl = validPublicUrl(cleanText(req.body && req.body.groupUrl, 1000));
   const groupUrlKey = groupUrl ? normalizeGroupUrl(groupUrl) : '';
   const contactInput = cleanText(req.body && req.body.contactUrl, 100);
   const contactUrl = validContactUrl(contactInput);
   const hasImage = Object.prototype.hasOwnProperty.call(req.body || {}, 'imageData');
   const imageData = hasImage && typeof req.body.imageData === 'string' ? req.body.imageData : '';
+  if (hasPublicationStatus && !['active','closed'].includes(publicationStatus)) return res.status(400).json({ error: 'Elegí si el grupo está abierto o cerrado a nuevos miembros.' });
   if (name.length < 2) return res.status(400).json({ error: 'El nombre debe tener al menos 2 caracteres.' });
   if (description.length < 5) return res.status(400).json({ error: 'La descripción debe tener al menos 5 caracteres.' });
   if (!groupUrl || !groupUrlKey) return res.status(400).json({ error: 'Ingresá un enlace público que empiece con http:// o https://.' });
@@ -749,10 +761,11 @@ app.patch('/api/groups/:id', requireDatabase, requireSameOrigin, optionalAuth, r
     const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 AND id<>$2 LIMIT 1', [groupUrlKey, id]);
     if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
     const result = await client.query(`UPDATE groups_public SET name=$1,category=$2,description=$3,rules=$4,
-      image_data=CASE WHEN $5 THEN NULLIF($6,'') ELSE image_data END, group_url=$7,group_url_key=$8,contact_url=NULLIF($9,'')
-      WHERE id=$10 AND owner_user_id=$11
-      RETURNING id,name,category,description,rules,image_data,group_url,contact_url,created_at`,
-      [name,category,description,rules,hasImage,imageData,groupUrl,groupUrlKey,contactUrl,id,req.user.id]);
+      image_data=CASE WHEN $5 THEN NULLIF($6,'') ELSE image_data END, group_url=$7,group_url_key=$8,contact_url=NULLIF($9,''),
+      publication_status=CASE WHEN $10 THEN $11 ELSE publication_status END
+      WHERE id=$12 AND owner_user_id=$13
+      RETURNING id,name,category,description,rules,publication_status,image_data,group_url,contact_url,created_at`,
+      [name,category,description,rules,hasImage,imageData,groupUrl,groupUrlKey,contactUrl,hasPublicationStatus,publicationStatus,id,req.user.id]);
     if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Solo quien publicó este grupo puede editarlo.' }); }
     await client.query('COMMIT');
     const stats = await pool.query('SELECT ROUND(AVG(rating)::numeric,1) AS rating_average, COUNT(*)::int AS rating_count, COALESCE(MAX(CASE WHEN user_id=$2 THEN rating END),0)::int AS my_rating FROM group_ratings WHERE group_id=$1', [id,req.user.id]);

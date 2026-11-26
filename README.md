@@ -1,6 +1,6 @@
 # Grupos-Web
 
-Directorio público para buscar y publicar grupos. Incluye perfil del grupo, foto, categoría, descripción, enlace público para unirse y animaciones livianas de píxeles que se desvanecen, destellos al tocar y entradas progresivas al desplazarse. Las animaciones respetan la preferencia de reducir movimiento del dispositivo. Las publicaciones quedan en PostgreSQL y se comparten entre todos los visitantes. No requiere Supabase, claves de API, ni editar un archivo de configuración.
+Directorio público para buscar y publicar grupos. Incluye perfil del grupo, foto, categoría, descripción, enlace público para unirse y animaciones livianas de píxeles que se desvanecen, destellos al tocar y entradas progresivas al desplazarse. Las animaciones respetan la preferencia de reducir movimiento del dispositivo. Las publicaciones quedan en PostgreSQL y se comparten entre todos los visitantes. Cada publicación puede marcarse como abierta o cerrada a nuevos miembros; las fichas cerradas siguen visibles y buscables, pero no muestran la acción para unirse ni copiar la invitación. Las publicaciones antiguas se conservan abiertas por defecto. No requiere Supabase, claves de API, ni editar un archivo de configuración.
 
 ## Cómo se guardan las fotos y publicaciones
 
