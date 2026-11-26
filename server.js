@@ -22,6 +22,7 @@ const SESSION_DAYS = 30;
 const passwordAttempts = new Map();
 const postAttempts = new Map();
 const commentAttempts = new Map();
+const commentActionAttempts = new Map();
 const reportAttempts = new Map();
 
 app.disable('x-powered-by');
@@ -129,7 +130,9 @@ async function initializeDatabase() {
       is_anonymous BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     await pool.query('ALTER TABLE group_comments ADD COLUMN IF NOT EXISTS image_data TEXT');
+    await pool.query('ALTER TABLE group_comments ADD COLUMN IF NOT EXISTS parent_comment_id BIGINT REFERENCES group_comments(id) ON DELETE CASCADE');
     await pool.query('CREATE INDEX IF NOT EXISTS group_comments_listing_idx ON group_comments (group_id, created_at DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS group_comments_parent_idx ON group_comments (parent_comment_id) WHERE parent_comment_id IS NOT NULL');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS group_ratings (
         id BIGSERIAL PRIMARY KEY,
@@ -427,44 +430,88 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
   } finally { if (client) client.release(); }
 });
 
-app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
+app.get('/api/groups/:id/comments', requireDatabase, optionalAuth, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   const offset = /^\d+$/.test(req.query.offset || '') ? Math.min(Number(req.query.offset), 1000000) : 0;
   const limit = /^\d+$/.test(req.query.limit || '') ? Math.min(Math.max(Number(req.query.limit), 1), 50) : 25;
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
   try {
     const [result, count] = await Promise.all([
-      pool.query(`SELECT id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at
-        FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
+      pool.query(`SELECT c.id, c.display_name, c.avatar_data, c.comment_text, c.image_data, c.is_anonymous,
+          c.parent_comment_id, parent.display_name AS reply_to_name, c.created_at,
+          (c.user_id=$4 AND c.user_id IS NOT NULL AND c.is_anonymous=FALSE) AS can_edit
+        FROM group_comments c LEFT JOIN group_comments parent ON parent.id=c.parent_comment_id
+        WHERE c.group_id=$1 ORDER BY c.created_at DESC, c.id DESC LIMIT $2 OFFSET $3`, [id, limit, offset, req.user ? req.user.id : null]),
       pool.query('SELECT COUNT(*)::int AS total FROM group_comments WHERE group_id=$1', [id])
     ]);
     if (req.query.offset === undefined && req.query.limit === undefined) return res.json(result.rows);
     res.json({ items: result.rows, total: count.rows[0].total, offset, limit });
   } catch (error) { next(error); }
 });
+function limitCommentActions(req, res, next) {
+  const now = Date.now(), key = req.ip || 'unknown';
+  let row = commentActionAttempts.get(key);
+  if (!row || row.until < now) row = { count: 0, until: now + 60 * 60 * 1000 };
+  if (row.count >= 20) return res.status(429).json({ error: 'Llegaste al límite de cambios en comentarios por ahora. Probá más tarde.' });
+  row.count++; commentActionAttempts.set(key, row);
+  if (commentActionAttempts.size > 5000) for (const [k, v] of commentActionAttempts) if (v.until < now) commentActionAttempts.delete(k);
+  next();
+}
 
 app.post('/api/groups/:id/comments', requireDatabase, requireSameOrigin, optionalAuth, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   const text = cleanText(req.body && req.body.text, 500);
   const imageData = typeof (req.body && req.body.imageData) === 'string' ? req.body.imageData : '';
   const identity = req.body && req.body.identity === 'profile' ? 'profile' : 'anonymous';
+  const rawParentId = req.body && req.body.parentId != null ? String(req.body.parentId) : '';
+  const parentId = /^\d+$/.test(rawParentId) ? rawParentId : '';
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  if (rawParentId && !parentId) return res.status(400).json({ error: 'Comentario de respuesta inválido.' });
   if (!text && !imageData) return res.status(400).json({ error: 'Escribí un comentario o elegí una foto.' });
   if (imageData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length > 600000)) return res.status(400).json({ error: 'La foto no es válida o pesa demasiado.' });
   const key = req.ip || 'unknown', now = Date.now(); let attempt = commentAttempts.get(key);
   if (!attempt || attempt.until < now) attempt = { count: 0, until: now + 60 * 60 * 1000 };
   if (attempt.count >= 12) return res.status(429).json({ error: 'Llegaste al límite de comentarios por ahora. Probá más tarde.' });
   attempt.count++; commentAttempts.set(key, attempt);
-  if (identity === 'profile' && !req.user) return res.status(401).json({ error: 'Iniciá sesión para comentar con tu perfil; también podés comentar como anónimo.' });
+  if ((identity === 'profile' || parentId) && !req.user) return res.status(401).json({ error: 'Iniciá sesión para responder o comentar con tu perfil; también podés comentar como anónimo.' });
+  if (parentId && identity !== 'profile') return res.status(400).json({ error: 'Las respuestas se publican con un perfil.' });
   try {
     const author = identity === 'profile' ? (req.user.display_name || req.user.username) : 'Anónimo';
     const avatar = identity === 'profile' ? req.user.avatar_data : null;
-    const result = await pool.query(`INSERT INTO group_comments (group_id,user_id,display_name,avatar_data,comment_text,is_anonymous,image_data)
-      SELECT id,$2,$3,$4,$5,$6,$7 FROM groups_public WHERE id=$1
-      RETURNING id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at`,
-      [id, identity === 'profile' ? req.user.id : null, author, avatar, text, identity === 'anonymous', imageData || null]);
-    if (!result.rowCount) return res.status(404).json({ error: 'Ese grupo ya no está publicado.' });
+    const result = await pool.query(`INSERT INTO group_comments (group_id,user_id,display_name,avatar_data,comment_text,is_anonymous,image_data,parent_comment_id)
+      SELECT g.id,$2,$3,$4,$5,$6,$7,CASE WHEN $8::bigint IS NULL THEN NULL ELSE p.id END
+      FROM groups_public g LEFT JOIN group_comments p ON p.id=$8 AND p.group_id=g.id AND p.parent_comment_id IS NULL
+      WHERE g.id=$1 AND ($8::bigint IS NULL OR p.id IS NOT NULL)
+      RETURNING id, display_name, avatar_data, comment_text, image_data, is_anonymous, parent_comment_id, created_at`,
+      [id, identity === 'profile' ? req.user.id : null, author, avatar, text, identity === 'anonymous', imageData || null, parentId || null]);
+    if (!result.rowCount) return res.status(404).json({ error: parentId ? 'No se encontró ese comentario o ya no admite respuestas.' : 'Ese grupo ya no está publicado.' });
     res.status(201).json(result.rows[0]);
+  } catch (error) { next(error); }
+});
+
+app.patch('/api/groups/:id/comments/:commentId', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limitCommentActions, async (req, res, next) => {
+  const groupId = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const commentId = /^\d+$/.test(req.params.commentId) ? req.params.commentId : '';
+  const text = cleanText(req.body && req.body.text, 500);
+  if (!groupId || !commentId) return res.status(400).json({ error: 'Comentario inválido.' });
+  if (typeof (req.body && req.body.text) !== 'string' || req.body.text.trim().length > 500) return res.status(400).json({ error: 'El comentario debe tener hasta 500 caracteres.' });
+  try {
+    const result = await pool.query(`UPDATE group_comments SET comment_text=$1
+      WHERE id=$2 AND group_id=$3 AND user_id=$4 AND is_anonymous=FALSE AND ($1<>'' OR image_data IS NOT NULL)
+      RETURNING id,comment_text,created_at`, [text,commentId,groupId,req.user.id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'No se encontró un comentario editable de tu perfil.' });
+    res.json(result.rows[0]);
+  } catch (error) { next(error); }
+});
+
+app.delete('/api/groups/:id/comments/:commentId', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limitCommentActions, async (req, res, next) => {
+  const groupId = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const commentId = /^\d+$/.test(req.params.commentId) ? req.params.commentId : '';
+  if (!groupId || !commentId) return res.status(400).json({ error: 'Comentario inválido.' });
+  try {
+    const result = await pool.query(`DELETE FROM group_comments WHERE id=$1 AND group_id=$2 AND user_id=$3 AND is_anonymous=FALSE RETURNING id`, [commentId,groupId,req.user.id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'No se encontró un comentario que puedas borrar.' });
+    res.json({ ok: true, id: result.rows[0].id });
   } catch (error) { next(error); }
 });
 
