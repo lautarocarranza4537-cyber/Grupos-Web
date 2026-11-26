@@ -275,7 +275,7 @@
   });
   $('#remove-photo').addEventListener('click',()=>{photo.value='';processedPhoto='';$('#preview-wrap').hidden=true;refreshCreatePreview();});
   $('#close').addEventListener('click',()=>$('#dialog').close()); $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog'))$('#dialog').close();});
-  search.addEventListener('input',()=>{clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(render,150);});
+  search.addEventListener('input',()=>{saveFilterPreferences();clearTimeout(searchRenderTimer);searchRenderTimer=setTimeout(render,150);});
   $('#category-filter').addEventListener('change',render);$('#language-filter').addEventListener('change',render);$('#publication-filter').addEventListener('change',render);$('#sort-groups').addEventListener('change',render);
   $('#favorites-filter').addEventListener('click',()=>{favoritesOnly=!favoritesOnly;render();});
   $('#reset-filters').addEventListener('click',()=>{search.value='';$('#category-filter').value='';$('#language-filter').value='';$('#publication-filter').value='';$('#sort-groups').value='newest';favoritesOnly=false;showBlocked=false;render();clearFilterPreferences();$('#filter-feedback').textContent='Filtros restablecidos. Las listas de guardados y bloqueados no se modificaron.';});
