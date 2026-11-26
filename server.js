@@ -142,6 +142,24 @@ async function initializeDatabase() {
       try { await migrationClient.query('ROLLBACK'); } catch {}
       throw error;
     } finally { migrationClient.release(); }
+    // Owner-requested one-time reset: only data created before the request.
+    // A post-request publication protects its older owner from deletion.
+    const resetClient = await pool.connect();
+    try {
+      await resetClient.query('BEGIN');
+      await resetClient.query("SELECT pg_advisory_xact_lock(hashtext('gw_reset_accounts_20261126')::bigint)");
+      const done = await resetClient.query("SELECT name FROM app_migrations WHERE name='gw_reset_accounts_20261126'");
+      if (!done.rowCount) {
+        const groups = await resetClient.query("DELETE FROM groups_public WHERE created_at < '2026-11-26T11:32:00Z'::timestamptz RETURNING id");
+        const users = await resetClient.query(`DELETE FROM app_users u WHERE u.created_at < '2026-11-26T11:32:00Z'::timestamptz AND NOT EXISTS (SELECT 1 FROM groups_public g WHERE g.owner_user_id=u.id) RETURNING u.id`);
+        await resetClient.query("INSERT INTO app_migrations (name) VALUES ('gw_reset_accounts_20261126')");
+        console.log('Reset solicitado: grupos=', groups.rowCount, 'cuentas=', users.rowCount);
+      }
+      await resetClient.query('COMMIT');
+    } catch (error) {
+      try { await resetClient.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally { resetClient.release(); }
     dbReady = true;
     console.log('PostgreSQL listo.');
   } catch (error) {
