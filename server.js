@@ -392,11 +392,16 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
 
 app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const offset = /^\d+$/.test(req.query.offset || '') ? Math.min(Number(req.query.offset), 1000000) : 0;
+  const limit = /^\d+$/.test(req.query.limit || '') ? Math.min(Math.max(Number(req.query.limit), 1), 50) : 25;
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
   try {
-    const result = await pool.query(`SELECT id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at
-      FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC LIMIT 100`, [id]);
-    res.json(result.rows);
+    const [result, count] = await Promise.all([
+      pool.query(`SELECT id, display_name, avatar_data, comment_text, image_data, is_anonymous, created_at
+        FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
+      pool.query('SELECT COUNT(*)::int AS total FROM group_comments WHERE group_id=$1', [id])
+    ]);
+    res.json({ items: result.rows, total: count.rows[0].total, offset, limit });
   } catch (error) { next(error); }
 });
 
