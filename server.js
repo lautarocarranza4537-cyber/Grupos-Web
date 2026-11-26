@@ -3,6 +3,7 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const { promisify } = require('util');
 const { Pool } = require('pg');
 
 const app = express();
@@ -15,14 +16,28 @@ const pool = databaseUrl ? new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000
 }) : null;
+const scrypt = promisify(crypto.scrypt);
+const SESSION_COOKIE = 'gw_session';
+const SESSION_DAYS = 30;
+const passwordAttempts = new Map();
+const postAttempts = new Map();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '3mb' }));
 app.use((req, res, next) => {
+  req.cookies = {};
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key) { try { req.cookies[key] = decodeURIComponent(rest.join('=')); } catch { req.cookies[key] = ''; } }
+  }
+  next();
+});
+app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Cache-Control', req.path.startsWith('/api/') ? 'no-store' : 'public, max-age=0, must-revalidate');
   next();
 });
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
@@ -54,6 +69,25 @@ async function initializeDatabase() {
       return;
     }
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_users (
+        id BIGSERIAL PRIMARY KEY,
+        username VARCHAR(24) NOT NULL UNIQUE,
+        password_salt TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_sessions (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS app_sessions_expiry_idx ON app_sessions (expires_at)');
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS groups_public (
         id BIGSERIAL PRIMARY KEY,
         name VARCHAR(70) NOT NULL,
@@ -64,16 +98,30 @@ async function initializeDatabase() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    // Additive-only migration: keep every existing listing and its current fields intact.
+    // Additive-only migration: no existing publication is altered or deleted here.
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS group_url_key TEXT');
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_token_hash TEXT');
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS contact_url TEXT');
+    await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_url_key_idx ON groups_public (group_url_key)');
+    await pool.query('CREATE INDEX IF NOT EXISTS groups_public_owner_idx ON groups_public (owner_user_id)');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS group_ratings (
+        id BIGSERIAL PRIMARY KEY,
+        group_id BIGINT NOT NULL REFERENCES groups_public(id) ON DELETE CASCADE,
+        user_id BIGINT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (group_id, user_id)
+      )
+    `);
     const legacy = await pool.query('SELECT id, group_url FROM groups_public WHERE group_url_key IS NULL');
     for (const row of legacy.rows) {
       const key = normalizeGroupUrl(row.group_url);
       await pool.query('UPDATE groups_public SET group_url_key = $1 WHERE id = $2 AND group_url_key IS NULL', [key, row.id]);
     }
+    await pool.query('DELETE FROM app_sessions WHERE expires_at < NOW()');
     dbReady = true;
     console.log('PostgreSQL listo.');
   } catch (error) {
@@ -85,23 +133,37 @@ function requireDatabase(req, res, next) {
   if (!pool || !dbReady) return res.status(503).json({ error: 'La base de datos todavía no está lista. Revisá la configuración de Render.' });
   next();
 }
-
-// Límite sencillo por IP para reducir publicaciones automáticas; se reinicia al reiniciar el servidor.
-const attempts = new Map();
-function limitPosts(req, res, next) {
-  const now = Date.now();
-  const key = req.ip || req.socket.remoteAddress || 'unknown';
-  const entry = attempts.get(key) || { count: 0, until: now + 60 * 60 * 1000 };
-  if (now > entry.until) { entry.count = 0; entry.until = now + 60 * 60 * 1000; }
-  if (entry.count >= 8) return res.status(429).json({ error: 'Se alcanzó el límite de publicaciones desde esta conexión. Probá más tarde.' });
-  entry.count += 1;
-  attempts.set(key, entry);
-  if (attempts.size > 5000) {
-    for (const [ip, value] of attempts) if (now > value.until) attempts.delete(ip);
-  }
+function requireSameOrigin(req, res, next) {
+  const origin = req.get('origin');
+  const expected = `${req.protocol}://${req.get('host')}`;
+  if (!origin || origin !== expected) return res.status(403).json({ error: 'Solicitud rechazada por seguridad. Recargá la página e intentá de nuevo.' });
   next();
 }
-
+function hashToken(value) { return crypto.createHash('sha256').update(value, 'utf8').digest('hex'); }
+function safeEqualHex(a, b) {
+  if (!/^[a-f0-9]{64}$/.test(a || '') || !/^[a-f0-9]{64}$/.test(b || '')) return false;
+  return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+}
+function cookieOptions() {
+  return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000 };
+}
+async function optionalAuth(req, res, next) {
+  req.user = null;
+  const raw = req.cookies[SESSION_COOKIE] || '';
+  if (!/^[a-f0-9]{64}$/.test(raw)) return next();
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.username FROM app_sessions s JOIN app_users u ON u.id=s.user_id
+      WHERE s.token_hash=$1 AND s.expires_at>NOW() LIMIT 1
+    `, [hashToken(raw)]);
+    req.user = result.rows[0] || null;
+  } catch (error) { return next(error); }
+  next();
+}
+function requireUser(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Iniciá sesión para publicar, calificar o borrar tus publicaciones.' });
+  next();
+}
 function cleanText(value, max) {
   return typeof value === 'string' ? value.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, max) : '';
 }
@@ -126,92 +188,159 @@ function validContactUrl(value) {
     return null;
   } catch { return null; }
 }
-function hashOwnerToken(value) {
-  return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+function limitPosts(req, res, next) {
+  const now = Date.now(), key = req.ip || 'unknown';
+  let entry = postAttempts.get(key);
+  if (!entry || entry.until < now) entry = { count: 0, until: now + 60 * 60 * 1000 };
+  if (entry.count >= 8) return res.status(429).json({ error: 'Se alcanzó el límite de publicaciones desde esta conexión. Probá más tarde.' });
+  entry.count++; postAttempts.set(key, entry);
+  if (postAttempts.size > 5000) for (const [k, v] of postAttempts) if (v.until < now) postAttempts.delete(k);
+  next();
+}
+function limited(req, res, next) {
+  const now = Date.now(), key = req.ip || 'unknown';
+  let row = passwordAttempts.get(key);
+  if (!row || row.until < now) row = { count: 0, until: now + 10 * 60 * 1000 };
+  if (row.count >= 15) return res.status(429).json({ error: 'Demasiados intentos. Esperá unos minutos y probá de nuevo.' });
+  row.count++; passwordAttempts.set(key, row);
+  if (passwordAttempts.size > 5000) for (const [k, v] of passwordAttempts) if (v.until < now) passwordAttempts.delete(k);
+  next();
 }
 
 app.get('/health', (req, res) => res.status(dbReady ? 200 : 503).json({ ok: dbReady, database: dbReady ? 'ready' : 'waiting' }));
 
-app.get('/api/groups', requireDatabase, async (req, res) => {
+app.get('/api/auth/me', requireDatabase, optionalAuth, (req, res) => res.json({ user: req.user ? { id: req.user.id, username: req.user.username } : null }));
+
+async function createSession(userId, res) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  await pool.query('INSERT INTO app_sessions (user_id, token_hash, expires_at) VALUES ($1,$2,$3)', [userId, hashToken(token), expiresAt]);
+  res.cookie(SESSION_COOKIE, token, cookieOptions());
+}
+
+app.post('/api/auth/register', requireDatabase, requireSameOrigin, limited, async (req, res) => {
+  const username = cleanText(req.body && req.body.username, 24).toLowerCase();
+  const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+  if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({ error: 'El usuario debe tener entre 3 y 24 caracteres: letras sin tilde, números o guion bajo.' });
+  if (password.length < 12 || password.length > 200) return res.status(400).json({ error: 'La contraseña debe tener entre 12 y 200 caracteres. No la reutilices en otros sitios.' });
   try {
-    const result = await pool.query(`
-      SELECT id, name, category, description, image_data, group_url, contact_url, created_at
-      FROM groups_public ORDER BY created_at DESC LIMIT 300
-    `);
-    res.json(result.rows);
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derived = await scrypt(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    const result = await pool.query('INSERT INTO app_users (username, password_salt, password_hash) VALUES ($1,$2,$3) RETURNING id, username', [username, salt, derived.toString('hex')]);
+    await createSession(result.rows[0].id, res);
+    res.status(201).json({ user: result.rows[0] });
   } catch (error) {
-    dbReady = false;
-    console.error('Error leyendo grupos:', error.message);
-    res.status(500).json({ error: 'No se pudieron cargar los grupos.' });
+    if (error.code === '23505') return res.status(409).json({ error: 'Ese nombre de usuario ya está ocupado.' });
+    console.error('Error creando cuenta:', error.message);
+    res.status(500).json({ error: 'No se pudo crear la cuenta. Probá de nuevo.' });
   }
 });
 
-app.post('/api/groups', requireDatabase, limitPosts, async (req, res) => {
+app.post('/api/auth/login', requireDatabase, requireSameOrigin, limited, async (req, res) => {
+  const username = cleanText(req.body && req.body.username, 24).toLowerCase();
+  const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+  if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length > 200) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+  try {
+    const result = await pool.query('SELECT id, username, password_salt, password_hash FROM app_users WHERE username=$1 LIMIT 1', [username]);
+    if (!result.rowCount) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    const user = result.rows[0];
+    const derived = await scrypt(password, user.password_salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    if (!safeEqualHex(derived.toString('hex'), user.password_hash)) return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    await createSession(user.id, res);
+    res.json({ user: { id: user.id, username: user.username } });
+  } catch (error) {
+    console.error('Error iniciando sesión:', error.message);
+    res.status(500).json({ error: 'No se pudo iniciar sesión. Probá de nuevo.' });
+  }
+});
+
+app.post('/api/auth/logout', requireDatabase, requireSameOrigin, async (req, res) => {
+  const token = req.cookies[SESSION_COOKIE] || '';
+  if (/^[a-f0-9]{64}$/.test(token)) await pool.query('DELETE FROM app_sessions WHERE token_hash=$1', [hashToken(token)]);
+  res.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
+  res.json({ ok: true });
+});
+
+app.get('/api/groups', requireDatabase, optionalAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT g.id, g.name, g.category, g.description, g.image_data, g.group_url, g.contact_url, g.created_at,
+             ROUND(AVG(r.rating)::numeric, 1) AS rating_average,
+             COUNT(r.id)::int AS rating_count,
+             COALESCE(MAX(CASE WHEN r.user_id=$1 THEN r.rating END),0)::int AS my_rating,
+             (g.owner_user_id=$1) AS is_owner
+      FROM groups_public g LEFT JOIN group_ratings r ON r.group_id=g.id
+      GROUP BY g.id ORDER BY g.created_at DESC LIMIT 300
+    `, [req.user ? req.user.id : null]);
+    res.json(result.rows);
+  } catch (error) { next(error); }
+});
+
+app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limitPosts, async (req, res, next) => {
   const name = cleanText(req.body && req.body.name, 70);
   const category = cleanText(req.body && req.body.category, 32) || 'General';
   const description = cleanText(req.body && req.body.description, 500);
   const groupUrl = validPublicUrl(cleanText(req.body && req.body.groupUrl, 1000));
   const groupUrlKey = groupUrl ? normalizeGroupUrl(groupUrl) : '';
   const imageData = typeof (req.body && req.body.imageData) === 'string' ? req.body.imageData : '';
-  const ownerToken = typeof (req.body && req.body.ownerToken) === 'string' ? req.body.ownerToken : '';
   const contactInput = cleanText(req.body && req.body.contactUrl, 100);
   const contactUrl = validContactUrl(contactInput);
-
   if (name.length < 2) return res.status(400).json({ error: 'El nombre debe tener al menos 2 caracteres.' });
   if (description.length < 5) return res.status(400).json({ error: 'La descripción debe tener al menos 5 caracteres.' });
   if (!groupUrl || !groupUrlKey) return res.status(400).json({ error: 'Ingresá un enlace público que empiece con http:// o https://.' });
-  if (!/^[a-f0-9]{64}$/.test(ownerToken)) return res.status(400).json({ error: 'No se pudo preparar la clave privada para administrar esta publicación. Recargá la página e intentá de nuevo.' });
   if (contactInput && !contactUrl) return res.status(400).json({ error: 'El contacto debe ser un número de WhatsApp con código de país o un enlace wa.me válido.' });
-  if (imageData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length > 2100000)) {
-    return res.status(400).json({ error: 'La foto no es válida o pesa demasiado. Probá con otra imagen.' });
-  }
-
+  if (imageData && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length > 2100000)) return res.status(400).json({ error: 'La foto no es válida o pesa demasiado. Probá con otra imagen.' });
   let client;
   try {
     client = await pool.connect();
     await client.query('BEGIN');
-    // Serialize creates for the same canonical URL without imposing a unique index
-    // that could reject the database if old listings already contain duplicates.
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [groupUrlKey]);
-    const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key = $1 LIMIT 1', [groupUrlKey]);
-    if (duplicate.rowCount) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' });
-    }
+    const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 LIMIT 1', [groupUrlKey]);
+    if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
     const result = await client.query(`
-      INSERT INTO groups_public (name, category, description, image_data, group_url, group_url_key, owner_token_hash, contact_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO groups_public (name, category, description, image_data, group_url, group_url_key, contact_url, owner_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING id, name, category, description, image_data, group_url, contact_url, created_at
-    `, [name, category, description, imageData || null, groupUrl, groupUrlKey, hashOwnerToken(ownerToken), contactUrl || null]);
+    `, [name, category, description, imageData || null, groupUrl, groupUrlKey, contactUrl || null, req.user.id]);
     await client.query('COMMIT');
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({ ...result.rows[0], rating_average: null, rating_count: 0, my_rating: 0, is_owner: true });
   } catch (error) {
-    try { await client.query('ROLLBACK'); } catch {}
+    if (client) { try { await client.query('ROLLBACK'); } catch {} }
     console.error('Error publicando grupo:', error.message);
-    res.status(500).json({ error: 'No se pudo publicar el grupo. Probá de nuevo.' });
+    next(error);
   } finally { if (client) client.release(); }
 });
 
-app.post('/api/groups/:id/delete', requireDatabase, async (req, res) => {
+app.post('/api/groups/:id/rating', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
-  const ownerToken = typeof (req.body && req.body.ownerToken) === 'string' ? req.body.ownerToken : '';
-  if (!id || !/^[a-f0-9]{64}$/.test(ownerToken)) return res.status(404).json({ error: 'No se pudo verificar que seas quien publicó este grupo.' });
+  const rating = Number(req.body && req.body.rating);
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Elegí una calificación de 1 a 5 estrellas.' });
   try {
-    const result = await pool.query(
-      'DELETE FROM groups_public WHERE id = $1 AND owner_token_hash = $2 RETURNING id',
-      [id, hashOwnerToken(ownerToken)]
-    );
-    if (!result.rowCount) return res.status(404).json({ error: 'No se pudo verificar que seas quien publicó este grupo.' });
+    const result = await pool.query(`
+      INSERT INTO group_ratings (group_id,user_id,rating) SELECT id,$2,$3 FROM groups_public WHERE id=$1
+      ON CONFLICT (group_id,user_id) DO UPDATE SET rating=EXCLUDED.rating, updated_at=NOW()
+      RETURNING group_id
+    `, [id, req.user.id, rating]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Ese grupo ya no está publicado.' });
+    const stats = await pool.query('SELECT ROUND(AVG(rating)::numeric,1) AS rating_average, COUNT(*)::int AS rating_count FROM group_ratings WHERE group_id=$1', [id]);
+    res.json({ ...stats.rows[0], my_rating: rating });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/groups/:id/delete', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(404).json({ error: 'No se encontró la publicación.' });
+  try {
+    const result = await pool.query('DELETE FROM groups_public WHERE id=$1 AND owner_user_id=$2 RETURNING id', [id, req.user.id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Solo quien publicó este grupo puede borrarlo.' });
     res.json({ ok: true, id: result.rows[0].id });
-  } catch (error) {
-    dbReady = false;
-    console.error('Error borrando grupo:', error.message);
-    res.status(500).json({ error: 'No se pudo borrar el grupo. Probá de nuevo.' });
-  }
+  } catch (error) { next(error); }
 });
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'La foto es demasiado grande. Elegí una más liviana.' });
+  if (res.headersSent) return next(err);
   console.error('Error inesperado:', err && err.message);
   res.status(500).json({ error: 'Ocurrió un error inesperado.' });
 });
