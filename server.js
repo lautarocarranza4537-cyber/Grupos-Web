@@ -150,6 +150,15 @@ async function initializeDatabase() {
     await pool.query('ALTER TABLE group_comments ADD COLUMN IF NOT EXISTS parent_comment_id BIGINT REFERENCES group_comments(id) ON DELETE CASCADE');
     await pool.query('CREATE INDEX IF NOT EXISTS group_comments_listing_idx ON group_comments (group_id, created_at DESC)');
     await pool.query('CREATE INDEX IF NOT EXISTS group_comments_parent_idx ON group_comments (parent_comment_id) WHERE parent_comment_id IS NOT NULL');
+    // Additive comment-report fields: legacy group reports stay classified as group reports.
+    await pool.query("ALTER TABLE group_reports ADD COLUMN IF NOT EXISTS target_type VARCHAR(12) NOT NULL DEFAULT 'group'");
+    await pool.query('ALTER TABLE group_reports ADD COLUMN IF NOT EXISTS comment_id BIGINT REFERENCES group_comments(id) ON DELETE CASCADE');
+    await pool.query(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='group_reports_target_type_check' AND conrelid='group_reports'::regclass) THEN
+        ALTER TABLE group_reports ADD CONSTRAINT group_reports_target_type_check CHECK (target_type IN ('group','comment'));
+      END IF;
+    END $$`);
+    await pool.query('CREATE INDEX IF NOT EXISTS group_reports_comment_idx ON group_reports (comment_id) WHERE comment_id IS NOT NULL');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS group_ratings (
         id BIGSERIAL PRIMARY KEY,
@@ -605,12 +614,38 @@ app.post('/api/groups/:id/reports', requireDatabase, requireSameOrigin, optional
     if (total.rows[0].count >= 2000) { await client.query('ROLLBACK'); return res.status(503).json({ error: 'La cola de revisión está temporalmente llena. Intentá más tarde.' }); }
     const recent = await client.query("SELECT COUNT(*)::int AS count FROM group_reports WHERE group_id=$1 AND status='open' AND created_at > NOW() - INTERVAL '24 hours'", [id]);
     if (recent.rows[0].count >= 100) { await client.query('ROLLBACK'); return res.status(429).json({ error: 'Este grupo ya alcanzó el límite temporal de denuncias abiertas.' }); }
-    const result = await client.query(`INSERT INTO group_reports (group_id,user_id,reason,details)
-      SELECT id,$2,$3,$4 FROM groups_public WHERE id=$1 RETURNING id,created_at`,
+    const result = await client.query(`INSERT INTO group_reports (group_id,target_type,user_id,reason,details)
+      SELECT id,'group',$2,$3,$4 FROM groups_public WHERE id=$1 RETURNING id,created_at`,
       [id, req.user ? req.user.id : null, reason, details]);
     if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No se encontró esa publicación.' }); }
     await client.query('COMMIT');
-    res.status(201).json({ ok: true, message: 'Gracias. La denuncia quedó registrada para revisión.' });
+    res.status(201).json({ ok: true, message: 'Gracias. La denuncia quedó registrada de forma privada; la revisión no está habilitada actualmente.' });
+  } catch (error) { if (client) { try { await client.query('ROLLBACK'); } catch {} } next(error); }
+  finally { if (client) client.release(); }
+});
+app.post('/api/groups/:id/comments/:commentId/reports', requireDatabase, requireSameOrigin, optionalAuth, limitReports, async (req, res, next) => {
+  const groupId = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const commentId = /^\d+$/.test(req.params.commentId) ? req.params.commentId : '';
+  const reason = typeof (req.body && req.body.reason) === 'string' ? req.body.reason : '';
+  const details = cleanText(req.body && req.body.details, 500);
+  if (!groupId || !commentId) return res.status(400).json({ error: 'Comentario inválido.' });
+  if (!reportReasons.has(reason)) return res.status(400).json({ error: 'Elegí un motivo válido para la denuncia.' });
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('gw_report_queue_cap_v1')::bigint)");
+    const total = await client.query("SELECT COUNT(*)::int AS count FROM group_reports WHERE status='open'");
+    if (total.rows[0].count >= 2000) { await client.query('ROLLBACK'); return res.status(503).json({ error: 'La cola de revisión está temporalmente llena. Intentá más tarde.' }); }
+    const recent = await client.query("SELECT COUNT(*)::int AS count FROM group_reports WHERE group_id=$1 AND status='open' AND created_at > NOW() - INTERVAL '24 hours'", [groupId]);
+    if (recent.rows[0].count >= 100) { await client.query('ROLLBACK'); return res.status(429).json({ error: 'Este grupo ya alcanzó el límite temporal de denuncias abiertas.' }); }
+    const result = await client.query(`INSERT INTO group_reports (group_id,comment_id,target_type,user_id,reason,details)
+      SELECT g.id,c.id,'comment',$3,$4,$5 FROM groups_public g
+      JOIN group_comments c ON c.group_id=g.id AND c.id=$2 WHERE g.id=$1
+      RETURNING id,created_at`, [groupId, commentId, req.user ? req.user.id : null, reason, details]);
+    if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No se encontró ese comentario en esta publicación.' }); }
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, message: 'Gracias. La denuncia quedó registrada de forma privada; la revisión no está habilitada actualmente.' });
   } catch (error) { if (client) { try { await client.query('ROLLBACK'); } catch {} } next(error); }
   finally { if (client) client.release(); }
 });
@@ -624,7 +659,7 @@ function requireModerationSecret(req, res, next) {
 }
 app.get('/api/moderation/reports', requireDatabase, requireModerationSecret, async (req, res, next) => {
   try {
-    const result = await pool.query(`SELECT r.id,r.group_id,g.name AS group_name,r.reason,r.details,r.status,r.created_at
+    const result = await pool.query(`SELECT r.id,r.group_id,g.name AS group_name,r.target_type,r.comment_id,r.reason,r.details,r.status,r.created_at
       FROM group_reports r JOIN groups_public g ON g.id=r.group_id
       WHERE r.status='open' ORDER BY r.created_at ASC LIMIT 100`);
     res.json({ items: result.rows });
@@ -637,13 +672,13 @@ app.patch('/api/moderation/reports/:id', requireDatabase, requireModerationSecre
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const report = await client.query('SELECT id,group_id FROM group_reports WHERE id=$1 FOR UPDATE', [id]);
+    const report = await client.query('SELECT id,group_id,target_type,comment_id FROM group_reports WHERE id=$1 FOR UPDATE', [id]);
     if (!report.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Denuncia no encontrada.' }); }
     if (action === 'hide-group') await client.query('UPDATE groups_public SET moderation_hidden=TRUE WHERE id=$1', [report.rows[0].group_id]);
     if (action === 'restore-group') await client.query('UPDATE groups_public SET moderation_hidden=FALSE WHERE id=$1', [report.rows[0].group_id]);
     await client.query("UPDATE group_reports SET status=$1,reviewed_at=NOW() WHERE id=$2", [action === 'dismiss' ? 'dismissed' : 'actioned', id]);
     await client.query('COMMIT');
-    res.json({ ok: true, action, group_id: report.rows[0].group_id });
+    res.json({ ok: true, action, group_id: report.rows[0].group_id, target_type: report.rows[0].target_type, comment_id: report.rows[0].comment_id });
   } catch (error) { try { await client.query('ROLLBACK'); } catch {} next(error); }
   finally { client.release(); }
 });
