@@ -47,7 +47,7 @@ Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de 
 ## Cuentas, publicaciones y calificaciones
 
 - Para publicar, votar o administrar tus grupos, creá una cuenta con usuario y contraseña. El usuario identifica al publicador; el servidor almacena la contraseña con scrypt y guarda sesiones en cookies HttpOnly y SameSite. Cada cuenta puede borrar sus publicaciones desde cualquier dispositivo después de iniciar sesión.
-- No se solicita correo, por lo que no existe recuperación automática si olvidás la contraseña. Elegí una contraseña larga y única, y guardala en un lugar seguro.
+- No se solicita correo, por lo que no existe recuperación automática si olvidás la contraseña. Si recordás la actual, podés cambiarla desde tu cuenta; al hacerlo se cierran las demás sesiones. Elegí una contraseña larga y única, y guardala en un lugar seguro.
 - Cada cuenta puede votar de 1 a 5 estrellas por grupo; puede cambiar su voto, pero cuenta una sola vez. El promedio y la cantidad de votos se muestran públicamente.
 - Las publicaciones existentes no se asignan automáticamente a una cuenta: no hay forma segura de saber qué persona las creó. Para que cada grupo nuevo sea administrable, se publica desde una cuenta.
 - El contacto opcional de WhatsApp sigue siendo público. El bloqueo anterior solo oculta publicaciones localmente en ese navegador; no bloquea mensajes de WhatsApp.

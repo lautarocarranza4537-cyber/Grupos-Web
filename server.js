@@ -333,6 +333,31 @@ app.post('/api/auth/login', requireDatabase, requireSameOrigin, limited, async (
   }
 });
 
+app.post('/api/account/password', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limited, async (req, res, next) => {
+  const currentPassword = typeof (req.body && req.body.currentPassword) === 'string' ? req.body.currentPassword : '';
+  const newPassword = typeof (req.body && req.body.newPassword) === 'string' ? req.body.newPassword : '';
+  if (newPassword.length < 12 || newPassword.length > 200) return res.status(400).json({ error: 'La nueva contraseña debe tener entre 12 y 200 caracteres.' });
+  try {
+    const result = await pool.query('SELECT password_salt,password_hash FROM app_users WHERE id=$1 LIMIT 1', [req.user.id]);
+    if (!result.rowCount) return res.status(401).json({ error: 'Iniciá sesión nuevamente.' });
+    const user = result.rows[0];
+    const currentHash = await scrypt(currentPassword, user.password_salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    if (!safeEqualHex(currentHash.toString('hex'), user.password_hash)) return res.status(401).json({ error: 'La contraseña actual no coincide.' });
+    const salt = crypto.randomBytes(16).toString('hex');
+    const nextHash = await scrypt(newPassword, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    const token = req.cookies[SESSION_COOKIE] || '';
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE app_users SET password_salt=$1,password_hash=$2 WHERE id=$3', [salt, nextHash.toString('hex'), req.user.id]);
+      await client.query('DELETE FROM app_sessions WHERE user_id=$1 AND token_hash<>$2', [req.user.id, hashToken(token)]);
+      await client.query('COMMIT');
+    } catch (error) { try { await client.query('ROLLBACK'); } catch {} throw error; }
+    finally { client.release(); }
+    res.json({ ok: true, message: 'Contraseña actualizada. Se cerraron las demás sesiones de tu cuenta.' });
+  } catch (error) { next(error); }
+});
+
 app.patch('/api/account/profile', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {
   const displayName = cleanText(req.body && req.body.displayName, 40);
   const avatarData = typeof (req.body && req.body.avatarData) === 'string' ? req.body.avatarData : '';
