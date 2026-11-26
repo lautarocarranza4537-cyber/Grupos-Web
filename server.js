@@ -122,6 +122,26 @@ async function initializeDatabase() {
       await pool.query('UPDATE groups_public SET group_url_key = $1 WHERE id = $2 AND group_url_key IS NULL', [key, row.id]);
     }
     await pool.query('DELETE FROM app_sessions WHERE expires_at < NOW()');
+    // One-time reset authorized by the site owner on 2026-11-26. Match the two
+    // exact pre-account records only; never delete posts created after this reset.
+    await pool.query('CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+    const migrationClient = await pool.connect();
+    try {
+      await migrationClient.query('BEGIN');
+      await migrationClient.query("SELECT pg_advisory_xact_lock(hashtext('gw_reset_20261126')::bigint)");
+      const done = await migrationClient.query("SELECT name FROM app_migrations WHERE name='gw_reset_20261126'");
+      if (!done.rowCount) {
+        const removed = await migrationClient.query(`DELETE FROM groups_public WHERE owner_user_id IS NULL AND
+          ((id=1 AND created_at='2026-11-26T03:25:53.886Z'::timestamptz) OR
+           (id=2 AND created_at='2026-11-26T04:14:25.469Z'::timestamptz)) RETURNING id`);
+        await migrationClient.query("INSERT INTO app_migrations (name) VALUES ('gw_reset_20261126')");
+        console.log('Reset único de publicaciones antiguas:', removed.rowCount);
+      }
+      await migrationClient.query('COMMIT');
+    } catch (error) {
+      try { await migrationClient.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally { migrationClient.release(); }
     dbReady = true;
     console.log('PostgreSQL listo.');
   } catch (error) {
