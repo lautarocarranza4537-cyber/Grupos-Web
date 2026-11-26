@@ -44,11 +44,13 @@ npm start
 
 Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de base de datos en archivos públicos.
 
-## Gestión, contacto y seguridad
+## Cuentas, publicaciones y calificaciones
 
-- Las publicaciones nuevas pueden incluir un número público de WhatsApp de contacto. La ficha abre un chat de WhatsApp; el teléfono es opcional y se advierte que será público. Las publicaciones anteriores siguen intactas y no tienen contacto si no se cargó uno.
-- Al publicar se genera una clave aleatoria de administración. El servidor guarda solo su hash y el navegador la conserva localmente para que quien publicó pueda borrar esa ficha desde el mismo navegador. Si se borran los datos del navegador o se usa otro dispositivo, esa clave no se recupera automáticamente. Las publicaciones anteriores no tienen clave de propietario, así que no se pueden borrar mediante esta función sin una verificación segura.
-- Bloquear es local a ese navegador: oculta todas las publicaciones que comparten el mismo contacto de WhatsApp; sin contacto, permite ocultar solo esa publicación. No es un bloqueo global ni una cuenta de usuario.
-- Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. La migración añade columnas e índice no único, conserva las publicaciones existentes y no borra duplicados antiguos.
+- Para publicar, votar o administrar tus grupos, creá una cuenta con usuario y contraseña. El usuario identifica al publicador; el servidor almacena la contraseña con scrypt y guarda sesiones en cookies HttpOnly y SameSite. Cada cuenta puede borrar sus publicaciones desde cualquier dispositivo después de iniciar sesión.
+- No se solicita correo, por lo que no existe recuperación automática si olvidás la contraseña. Elegí una contraseña larga y única, y guardala en un lugar seguro.
+- Cada cuenta puede votar de 1 a 5 estrellas por grupo; puede cambiar su voto, pero cuenta una sola vez. El promedio y la cantidad de votos se muestran públicamente.
+- Las publicaciones existentes no se asignan automáticamente a una cuenta: no hay forma segura de saber qué persona las creó. Para que cada grupo nuevo sea administrable, se publica desde una cuenta.
+- El contacto opcional de WhatsApp sigue siendo público. El bloqueo anterior solo oculta publicaciones localmente en ese navegador; no bloquea mensajes de WhatsApp.
+- Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. Las migraciones son aditivas y no borran grupos ni votos.
 
-Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud y restringen la frecuencia de publicaciones por IP. Es un directorio abierto: no hay cuentas ni revisión previa, así que cualquiera puede publicar. Para un sitio con mucho tráfico, conviene añadir autenticación o moderación.
+Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud, limitan la frecuencia de publicaciones e intentos de cuenta y verifican acciones por sesión. El directorio es público y cualquiera puede ver sus perfiles.
