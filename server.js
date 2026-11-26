@@ -401,6 +401,7 @@ app.get('/api/groups/:id/comments', requireDatabase, async (req, res, next) => {
         FROM group_comments WHERE group_id=$1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`, [id, limit, offset]),
       pool.query('SELECT COUNT(*)::int AS total FROM group_comments WHERE group_id=$1', [id])
     ]);
+    if (req.query.offset === undefined && req.query.limit === undefined) return res.json(result.rows);
     res.json({ items: result.rows, total: count.rows[0].total, offset, limit });
   } catch (error) { next(error); }
 });
