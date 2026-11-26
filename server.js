@@ -511,6 +511,22 @@ app.get('/api/groups/:id', requireDatabase, optionalAuth, async (req, res, next)
   } catch (error) { next(error); }
 });
 
+app.get('/api/groups/:id/related', requireDatabase, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  try {
+    const result = await pool.query(`
+      SELECT related.id, related.name, related.category
+      FROM groups_public current
+      JOIN groups_public related ON related.category=current.category
+      WHERE current.id=$1 AND current.moderation_hidden=FALSE
+        AND related.id<>current.id AND related.moderation_hidden=FALSE
+      ORDER BY related.created_at DESC, related.id DESC LIMIT 4
+    `, [id]);
+    res.json(result.rows);
+  } catch (error) { next(error); }
+});
+
 app.get('/api/groups/:id/comments', requireDatabase, optionalAuth, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   const offset = /^\d+$/.test(req.query.offset || '') ? Math.min(Number(req.query.offset), 1000000) : 0;
