@@ -22,6 +22,7 @@ const SESSION_DAYS = 30;
 const passwordAttempts = new Map();
 const postAttempts = new Map();
 const commentAttempts = new Map();
+const reportAttempts = new Map();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -111,6 +112,16 @@ async function initializeDatabase() {
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_url_key_idx ON groups_public (group_url_key)');
     await pool.query('CREATE INDEX IF NOT EXISTS groups_public_owner_idx ON groups_public (owner_user_id)');
+    await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS moderation_hidden BOOLEAN NOT NULL DEFAULT FALSE');
+    await pool.query(`CREATE TABLE IF NOT EXISTS group_reports (
+      id BIGSERIAL PRIMARY KEY, group_id BIGINT NOT NULL REFERENCES groups_public(id) ON DELETE CASCADE,
+      user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL,
+      reason VARCHAR(24) NOT NULL CHECK (reason IN ('spam','scam','abuse','inappropriate','invalid_link','other')),
+      details VARCHAR(500) NOT NULL DEFAULT '', status VARCHAR(16) NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open','dismissed','actioned')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), reviewed_at TIMESTAMPTZ
+    )`);
+    await pool.query('CREATE INDEX IF NOT EXISTS group_reports_queue_idx ON group_reports (status, created_at DESC)');
     await pool.query(`CREATE TABLE IF NOT EXISTS group_comments (
       id BIGSERIAL PRIMARY KEY, group_id BIGINT NOT NULL REFERENCES groups_public(id) ON DELETE CASCADE,
       user_id BIGINT REFERENCES app_users(id) ON DELETE SET NULL,
@@ -349,6 +360,7 @@ app.get('/api/groups', requireDatabase, optionalAuth, async (req, res, next) => 
              COALESCE(MAX(CASE WHEN r.user_id=$1 THEN r.rating END),0)::int AS my_rating,
              (g.owner_user_id=$1) AS is_owner
       FROM groups_public g LEFT JOIN group_ratings r ON r.group_id=g.id
+      WHERE g.moderation_hidden=FALSE
       GROUP BY g.id ORDER BY g.created_at DESC LIMIT 300
     `, [req.user ? req.user.id : null]);
     res.json(result.rows);
@@ -429,6 +441,74 @@ app.post('/api/groups/:id/comments', requireDatabase, requireSameOrigin, optiona
     if (!result.rowCount) return res.status(404).json({ error: 'Ese grupo ya no está publicado.' });
     res.status(201).json(result.rows[0]);
   } catch (error) { next(error); }
+});
+
+function limitReports(req, res, next) {
+  const now = Date.now(), key = req.ip || 'unknown';
+  let row = reportAttempts.get(key);
+  if (!row || row.until < now) row = { count: 0, until: now + 60 * 60 * 1000 };
+  if (row.count >= 3) return res.status(429).json({ error: 'Llegaste al límite de denuncias por ahora. Probá más tarde.' });
+  row.count++; reportAttempts.set(key, row);
+  if (reportAttempts.size > 5000) for (const [k, v] of reportAttempts) if (v.until < now) reportAttempts.delete(k);
+  next();
+}
+const reportReasons = new Set(['spam','scam','abuse','inappropriate','invalid_link','other']);
+app.post('/api/groups/:id/reports', requireDatabase, requireSameOrigin, optionalAuth, limitReports, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const reason = typeof (req.body && req.body.reason) === 'string' ? req.body.reason : '';
+  const details = cleanText(req.body && req.body.details, 500);
+  if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
+  if (!reportReasons.has(reason)) return res.status(400).json({ error: 'Elegí un motivo válido para la denuncia.' });
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('gw_report_queue_cap_v1')::bigint)");
+    const total = await client.query("SELECT COUNT(*)::int AS count FROM group_reports WHERE status='open'");
+    if (total.rows[0].count >= 2000) { await client.query('ROLLBACK'); return res.status(503).json({ error: 'La cola de revisión está temporalmente llena. Intentá más tarde.' }); }
+    const recent = await client.query("SELECT COUNT(*)::int AS count FROM group_reports WHERE group_id=$1 AND status='open' AND created_at > NOW() - INTERVAL '24 hours'", [id]);
+    if (recent.rows[0].count >= 100) { await client.query('ROLLBACK'); return res.status(429).json({ error: 'Este grupo ya alcanzó el límite temporal de denuncias abiertas.' }); }
+    const result = await client.query(`INSERT INTO group_reports (group_id,user_id,reason,details)
+      SELECT id,$2,$3,$4 FROM groups_public WHERE id=$1 RETURNING id,created_at`,
+      [id, req.user ? req.user.id : null, reason, details]);
+    if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No se encontró esa publicación.' }); }
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, message: 'Gracias. La denuncia quedó registrada para revisión.' });
+  } catch (error) { if (client) { try { await client.query('ROLLBACK'); } catch {} } next(error); }
+  finally { if (client) client.release(); }
+});
+function requireModerationSecret(req, res, next) {
+  const expected = process.env.MODERATION_TOKEN || '';
+  if (expected.length < 32) return res.status(503).json({ error: 'La revisión de moderación no está configurada.' });
+  const supplied = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const a = Buffer.from(expected), b = Buffer.from(supplied);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: 'No autorizado.' });
+  next();
+}
+app.get('/api/moderation/reports', requireDatabase, requireModerationSecret, async (req, res, next) => {
+  try {
+    const result = await pool.query(`SELECT r.id,r.group_id,g.name AS group_name,r.reason,r.details,r.status,r.created_at
+      FROM group_reports r JOIN groups_public g ON g.id=r.group_id
+      WHERE r.status='open' ORDER BY r.created_at ASC LIMIT 100`);
+    res.json({ items: result.rows });
+  } catch (error) { next(error); }
+});
+app.patch('/api/moderation/reports/:id', requireDatabase, requireModerationSecret, async (req, res, next) => {
+  const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
+  const action = req.body && req.body.action;
+  if (!id || !['dismiss','hide-group','restore-group'].includes(action)) return res.status(400).json({ error: 'Acción de moderación inválida.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const report = await client.query('SELECT id,group_id FROM group_reports WHERE id=$1 FOR UPDATE', [id]);
+    if (!report.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Denuncia no encontrada.' }); }
+    if (action === 'hide-group') await client.query('UPDATE groups_public SET moderation_hidden=TRUE WHERE id=$1', [report.rows[0].group_id]);
+    if (action === 'restore-group') await client.query('UPDATE groups_public SET moderation_hidden=FALSE WHERE id=$1', [report.rows[0].group_id]);
+    await client.query("UPDATE group_reports SET status=$1,reviewed_at=NOW() WHERE id=$2", [action === 'dismiss' ? 'dismissed' : 'actioned', id]);
+    await client.query('COMMIT');
+    res.json({ ok: true, action, group_id: report.rows[0].group_id });
+  } catch (error) { try { await client.query('ROLLBACK'); } catch {} next(error); }
+  finally { client.release(); }
 });
 
 app.post('/api/groups/:id/rating', requireDatabase, requireSameOrigin, optionalAuth, requireUser, async (req, res, next) => {

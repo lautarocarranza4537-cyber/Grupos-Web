@@ -54,3 +54,10 @@ Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de 
 - Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. Las migraciones son aditivas y no borran grupos ni votos.
 
 Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud, limitan la frecuencia de publicaciones e intentos de cuenta y verifican acciones por sesión. El directorio es público y cualquiera puede ver sus perfiles.
+
+
+## Denuncias y moderación
+
+Las denuncias públicas se validan por motivo, se limitan a 3 por hora y dirección de origen, y tienen un tope de 100 abiertas por grupo y 2.000 en total. La lista de denuncias no es pública. Para habilitar la cola privada de moderación, configurá en el entorno del servicio una variable `MODERATION_TOKEN` de al menos 32 caracteres aleatorios y mantenela fuera del repositorio, el navegador, las URLs y los mensajes. Sin esa variable, los endpoints privados devuelven 503 y no hay interfaz administrativa pública. Ver `MODERATION.md` para el uso de la API protegida.
+
+La base gratuita de Render mencionada en la interfaz tiene vencimiento; no se configuró ni verificó una copia de seguridad o restauración. Antes de depender de estas publicaciones, confirmá el vencimiento exacto en Render y prepara una exportación/restauración en un destino persistente. No se debe cambiar el plan ni aceptar costos sin consentimiento.
