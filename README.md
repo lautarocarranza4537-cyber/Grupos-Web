@@ -44,6 +44,11 @@ npm start
 
 Abrí `http://127.0.0.1:3000`. Para detener, Ctrl+C. No guardes una URL real de base de datos en archivos públicos.
 
-## Protección básica incluida
+## Gestión, contacto y seguridad
+
+- Las publicaciones nuevas pueden incluir un número público de WhatsApp de contacto. La ficha abre un chat de WhatsApp; el teléfono es opcional y se advierte que será público. Las publicaciones anteriores siguen intactas y no tienen contacto si no se cargó uno.
+- Al publicar se genera una clave aleatoria de administración. El servidor guarda solo su hash y el navegador la conserva localmente para que quien publicó pueda borrar esa ficha desde el mismo navegador. Si se borran los datos del navegador o se usa otro dispositivo, esa clave no se recupera automáticamente. Las publicaciones anteriores no tienen clave de propietario, así que no se pueden borrar mediante esta función sin una verificación segura.
+- Bloquear es local a ese navegador: oculta todas las publicaciones que comparten el mismo contacto de WhatsApp; sin contacto, permite ocultar solo esa publicación. No es un bloqueo global ni una cuenta de usuario.
+- Antes de insertar, se compara el enlace normalizado y se rechazan duplicados. La migración añade columnas e índice no único, conserva las publicaciones existentes y no borra duplicados antiguos.
 
 Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud y restringen la frecuencia de publicaciones por IP. Es un directorio abierto: no hay cuentas ni revisión previa, así que cualquiera puede publicar. Para un sitio con mucho tráfico, conviene añadir autenticación o moderación.
