@@ -128,13 +128,13 @@ async function initializeDatabase() {
     const migrationClient = await pool.connect();
     try {
       await migrationClient.query('BEGIN');
-      await migrationClient.query("SELECT pg_advisory_xact_lock(hashtext('gw_reset_20261126')::bigint)");
-      const done = await migrationClient.query("SELECT name FROM app_migrations WHERE name='gw_reset_20261126'");
+      await migrationClient.query("SELECT pg_advisory_xact_lock(hashtext('gw_reset_20261126_v2')::bigint)");
+      const done = await migrationClient.query("SELECT name FROM app_migrations WHERE name='gw_reset_20261126_v2'");
       if (!done.rowCount) {
         const removed = await migrationClient.query(`DELETE FROM groups_public WHERE owner_user_id IS NULL AND
-          ((id=1 AND created_at='2026-11-26T03:25:53.886Z'::timestamptz) OR
-           (id=2 AND created_at='2026-11-26T04:14:25.469Z'::timestamptz)) RETURNING id`);
-        await migrationClient.query("INSERT INTO app_migrations (name) VALUES ('gw_reset_20261126')");
+          ((id=1 AND date_trunc('milliseconds', created_at)='2026-11-26T03:25:53.886Z'::timestamptz) OR
+           (id=2 AND date_trunc('milliseconds', created_at)='2026-11-26T04:14:25.469Z'::timestamptz)) RETURNING id`);
+        await migrationClient.query("INSERT INTO app_migrations (name) VALUES ('gw_reset_20261126_v2')");
         console.log('Reset único de publicaciones antiguas:', removed.rowCount);
       }
       await migrationClient.query('COMMIT');
