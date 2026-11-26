@@ -241,3 +241,115 @@ Public sharing currently remains hash-based (`/#grupo-<id>`); direct SSR/SEO gro
 - Producción respondió `/health` con `{"ok":true,"database":"ready"}`. Después de la migración, `GET /api/groups/8` devolvió el grupo existente con `language: ""` y conservó su id/nombre/categoría/descripción, sin asignar español u otro idioma. HTML cache-busted de `/grupo/8` sirvió los campos/filtro/etiquetas; como la única fila no tiene idioma, no se esperaba ni se observó keyword SEO inventada. Navegador de producción: el filtro «Sin especificar» mantuvo el grupo, búsqueda «sin especificar» mostró 1 resultado y el campo de alta cambió la previsualización local a «Idioma: Português». Se recargó la página para limpiar texto/filtros; no se envió ningún formulario ni se llamó a endpoints de escritura. Consola sin errores.
 - No se agregaron grupos/cuentas de prueba ni se ejecutó POST/PATCH/DELETE. El cambio de base se limita a la nueva columna con default aditivo; no se editaron comentarios, grupos, cuentas, votos, denuncias, secretos, configuración ni plan de Render. Abrir la ficha para comprobar la etiqueta pudo actualizar el historial local de «vistos recientemente» del navegador; no se cambió deliberadamente la lista de favoritos/bloqueados. El comentario id 5 continúa ausente, con causa desconocida; no se intentó recuperar ni recrear.
 - Actualizado el tally del checklist explícito: **20 completos, 15 parciales, 2 abiertos en 37 puntos**. Es el alcance documentado de trabajo, no un porcentaje ni un cruce fiel de las 100 propuestas originales. El flujo positivo de escritura del propietario, el cruce original, los demás bloqueos operativos y la exportación/restauración de base siguen pendientes.
+
+
+## Cruce conservador con las 100 propuestas originales (auditoría 2026-11-26)
+
+Estados: **Completa** = comportamiento implementado y evidencia de despliegue/prueba documentada; **Parcial** = existe solo parte, o la verificación positiva/prueba de usuario está pendiente; **Pendiente** = no implementado; **Bloqueada** = exige configuración externa/decisión del titular. Este cruce es una auditoría documental basada en el historial de cambios y comprobaciones listados arriba; no reemplaza una nueva prueba de cada ruta ni afirma que todos los features funcionan en todas las cuentas/dispositivos.
+
+**Resultado de este cruce: 22 completas, 48 parciales, 26 pendientes y 4 bloqueadas (total 100).** Esto no equivale al tally del checklist operativo.
+
+| # | Propuesta original | Estado | Evidencia / límite |
+|---:|---|---|---|
+| 1 | Tarjeta de comunidad con portada, categoría, actividad y datos clave | Parcial | La tarjeta muestra foto/categoría/estado/fecha; no muestra actividad reciente. No hay suficientes grupos para validar variedad.Contabilizar como parcial. |
+| 2 | Modo oscuro y claro | Pendiente | Solo se documenta el tema oscuro actual; no hay selector claro. |
+| 3 | Mejorar experiencia móvil en formularios y detalles | Parcial | Hay CSS responsive y vistas de diálogo; no consta una prueba completa en varios móviles. |
+| 4 | Animación breve de carga para grupos y comentarios | Parcial | Hay estados de carga y animaciones puntuales; no se verificó un sistema común de carga. |
+| 5 | Mensajes claros de éxito y error | Completa | Los flujos visibles usan estados/mensajes de éxito y error; verificado en los formularios probados. |
+| 6 | Contadores de caracteres en descripción y comentarios | Completa | Contadores desplegados también en reglas, edición y detalles de reportes. |
+| 7 | Cerrar diálogos con Escape y volver al punto anterior | Parcial | Los diálogos usan el elemento dialog; no consta prueba de Escape/restauración de foco e historial en todos los recorridos. |
+| 8 | Recordar filtros al navegar | Pendiente | No hay persistencia confirmada de filtros de búsqueda entre navegación/recarga. |
+| 9 | Botones claros para publicar, editar y borrar | Completa | Acciones están rotuladas y separadas; borrado muestra confirmación. |
+| 10 | Página de ayuda | Completa | /ayuda.html está publicada y enlazada desde el pie. |
+| 11 | Filtros por categoría, idioma y actividad | Parcial | Filtros de categoría/idioma/estado existen; no hay filtro de actividad. |
+| 12 | Ordenar por novedades, puntuación o comentarios | Parcial | Orden por novedades, puntuación/votos y nombre; falta ordenar por cantidad de comentarios. |
+| 13 | Búsqueda con aproximación y errores simples | Parcial | Búsqueda sin tildes y normalización; no hay tolerancia demostrada a errores tipográficos. |
+| 14 | Sugerencias al escribir | Parcial | Se alimenta datalist desde grupos públicos y se validó su contenido; la selección del popup nativo no se verificó visualmente. |
+| 15 | Categorías navegables (gaming, estudio, memes, música) | Parcial | Se filtra por categorías existentes; no hay catálogo navegable predefinido/páginas de categorías. |
+| 16 | Buscar por nombre, descripción y etiquetas | Parcial | Busca en nombre, categoría, descripción y reglas; no se implementaron etiquetas temáticas. |
+| 17 | Etiquetas temáticas por categoría | Pendiente | No implementadas. |
+| 18 | Grupos relacionados en la ficha | Completa | La ficha consulta hasta cuatro grupos públicos de la misma categoría, excluyendo el propio/ocultos. |
+| 19 | Grupos destacados con criterios públicos | Pendiente | No hay selección ni criterios públicos de destacados. |
+| 20 | Páginas compartibles por categoría | Pendiente | Hay páginas directas por grupo, no páginas por categoría. |
+| 21 | Mostrar publicación y última actualización | Parcial | Se muestra fecha de publicación; fecha de actualización no está expuesta. |
+| 22 | Reglas del grupo escritas por quien publica | Completa | Reglas/detalles opcionales se pueden publicar y editar; el campo y la visualización están desplegados. |
+| 23 | Quien publica actualiza descripción, imagen y enlace | Parcial | La edición autenticada está desplegada, pero el flujo positivo con cuenta/fixture desechable no se probó. |
+| 24 | Avisar que el enlace no funciona | Parcial | Existe motivo de denuncia «enlace inválido»; no se probó envío positivo ni revisión por moderación. |
+| 25 | Indicar cupos o cierre temporal | Completa | Estado abierto/cerrado y filtro están desplegados; “cupos” como cifra no existe. |
+| 26 | Indicar si grupo es público, privado o temático | Parcial | El directorio es público y admite categorías/estado; no hay clasificación separada público/privado/temático. |
+| 27 | Preguntas frecuentes o detalles antes de abrir WhatsApp | Completa | Campo público de reglas/detalles aparece en la ficha antes del enlace. |
+| 28 | Galería con varias imágenes | Pendiente | Se mantiene una imagen de perfil por publicación. |
+| 29 | Fecha de última actividad sin datos personales | Pendiente | No implementada. |
+| 30 | Vista previa antes de publicar | Parcial | Preview local de crear/editar existe; persistencia positiva del envío no se verificó con fixture desechable. |
+| 31 | Responder comentarios | Parcial | Respuestas autenticadas de un nivel desplegadas; flujo positivo espera fixture aislado. |
+| 32 | Reacciones sencillas a comentarios | Pendiente | No implementadas. |
+| 33 | Ordenar comentarios por recientes/populares | Pendiente | Hay paginación, no control de orden. |
+| 34 | Marcar comentarios nuevos desde la última visita | Pendiente | No implementado. |
+| 35 | Editar o borrar comentario propio | Parcial | Controles y endpoints owner-only desplegados; prueba positiva pendiente por falta de fixture seguro. |
+| 36 | Reportar un comentario | Parcial | Formulario/API desplegados; envío exitoso y revisión no se probaron. |
+| 37 | Limitar tamaño/formato de imágenes de comentarios | Completa | Formatos y límites/procesamiento están aplicados en cliente/servidor; validado estáticamente y en smoke checks. |
+| 38 | Cargar más comentarios al desplazarse | Parcial | Botón “Ver más” paginado existe; carga automática al desplazarse no. |
+| 39 | Fijar comentario importante | Pendiente | No implementado. |
+| 40 | Advertir antes de publicar datos personales en comentarios | Parcial | La ficha advierte que el contenido es público; no hay advertencia contextual específica en el formulario de comentario. |
+| 41 | Inicio de sesión con Google | Bloqueada | Requiere configuración del propietario en Google Cloud/OAuth; no hay credenciales OAuth listas y MFA/verificación quedó pendiente. |
+| 42 | Recuperación de cuenta por correo | Bloqueada | No hay proveedor de correo configurado ni mecanismo seguro de recuperación. |
+| 43 | Acceso por teléfono con verificación SMS | Bloqueada | Requiere proveedor/credenciales y configuración externa del propietario. |
+| 44 | Cambiar contraseña desde la cuenta | Parcial | UI/API desplegadas y gate no autenticado probado; cambio positivo no se probó con cuenta desechable. |
+| 45 | Cerrar sesión en todos los dispositivos | Parcial | Cambiar contraseña revoca otras sesiones según implementación; no se verificó un control independiente “cerrar sesión en todos”. |
+| 46 | Perfil público con grupos si la persona lo permite | Pendiente | No hay página/listado de grupos por autor ni ajuste de visibilidad. |
+| 47 | Elegir qué partes del perfil son públicas | Pendiente | No hay controles granulares de privacidad de perfil. |
+| 48 | Aclarar perfil frente a comentario anónimo | Completa | Selector “Anónimo/Mi perfil” y texto de interfaz están presentes. |
+| 49 | Vista previa del perfil público | Pendiente | Solo existe preview de foto en formulario; no una ficha previa de perfil público. |
+| 50 | Descargar o eliminar cuenta y datos propios | Pendiente | No hay exportación ni eliminación de cuenta propia implementada. |
+| 51 | Reportes de grupos, comentarios e imágenes | Parcial | Intake de grupo/comentario está desplegado; reportar imagen depende del reporte del comentario; éxito no probado. |
+| 52 | Panel de moderación para revisar reportes | Bloqueada | Hay API privada, no panel; además `MODERATION_TOKEN` no está configurado en producción y la cola responde 503. |
+| 53 | Detectar enlaces repetidos o sospechosos | Parcial | Aviso de duplicados en navegador y rechazo de duplicados en backend; no hay detección general de enlaces sospechosos. |
+| 54 | Límites de frecuencia para cuentas nuevas | Parcial | Hay límites por IP/acciones; no hay política de límites específicos probada para cuentas nuevas. |
+| 55 | Medidas contra spam/publicación automática | Parcial | Rate limits, validación y detección de duplicados; no hay protección integral contra automatización/CAPTCHA. |
+| 56 | Bloquear a una persona dentro del sitio | Parcial | “Bloquear publicador” oculta contenido localmente en este navegador; no es bloqueo de cuenta/global. |
+| 57 | Normas comunitarias visibles antes de publicar | Parcial | Ayuda/legal describen uso seguro; no se verificó un flujo de aceptación de reglas comunitarias antes del envío. |
+| 58 | Historial de cambios de publicaciones propias | Pendiente | No implementado. |
+| 59 | Controlar tamaño de imágenes subidas | Completa | Validación de tipo/tamaño y reducción/procesamiento están desplegados. |
+| 60 | Aviso destacado de que enlaces/fotos/comentarios son públicos | Completa | Avisos visibles sobre enlaces/contacto/fotos/comentarios en la ficha y formularios. |
+| 61 | Páginas públicas individuales compartibles | Completa | Rutas /grupo/:id desplegadas; hash antiguo también abre la ficha. |
+| 62 | Títulos y descripciones SEO por grupo | Completa | Render server-side de título/descripción y canonical por ficha desplegado. |
+| 63 | Datos estructurados para buscadores | Completa | JSON-LD por grupo desplegado; no se afirma indexación efectiva. |
+| 64 | Revisar sitemap y seguir indexación en Search Console | Parcial | Sitemap y endpoint comprobados; Search Console mostró problemas/cuota, indexación no garantizada. |
+| 65 | Enlaces para compartir por WhatsApp/copia/redes | Parcial | Compartir y copia/URL directa disponibles; no se verificó acción específica de WhatsApp en todos los dispositivos. |
+| 66 | Tarjeta atractiva al compartir | Parcial | Metadata Open Graph/Twitter en páginas de grupo; preview visual en redes no verificado. |
+| 67 | Páginas útiles por categoría | Pendiente | No hay rutas dedicadas por categoría. |
+| 68 | Guía de buenas prácticas para publicar | Completa | /ayuda.html explica publicación y uso seguro; está enlazada y desplegada. |
+| 69 | Analítica respetuosa con privacidad | Pendiente | No hay sistema de analítica/documentación implementado. |
+| 70 | Página sobre cómo elegir un grupo seguro | Pendiente | La guía cubre avisos de seguridad, pero no existe una página/sección específica desarrollada para selección segura. |
+| 71 | Comprimir imágenes automáticamente | Completa | Procesamiento/redimensionado de imágenes implementado para carga. |
+| 72 | Carga diferida de imágenes | Completa | Imágenes fuera de pantalla usan lazy loading/decodificación asíncrona. |
+| 73 | Mejorar carga inicial en celulares lentos | Parcial | Hay lazy loading, debounce y optimizaciones; no hay mediciones comparables de rendimiento móvil. |
+| 74 | Probar conexiones móviles inestables | Pendiente | No se documenta prueba de red lenta/interrumpida. |
+| 75 | Buen contraste de texto y botones | Parcial | Se han corregido elementos puntuales; no hay auditoría WCAG/contraste integral. |
+| 76 | Teclado y lectores de pantalla | Parcial | Se añadieron etiquetas/status/foco y estados accesibles; no hay auditoría completa WCAG. |
+| 77 | Textos alternativos útiles en imágenes | Parcial | Hay textos alternativos; algunos son genéricos y no se auditó cada contexto. |
+| 78 | Respetar reducción de animaciones del sistema | Completa | Regla `prefers-reduced-motion` desplegada; compatibilidad multi-navegador no exhaustivamente probada. |
+| 79 | Evitar que diálogos/formularios se corten en móvil | Parcial | Se aplican estilos responsive/scroll en modal; prueba de matriz completa de tamaños pendiente. |
+| 80 | Página amigable si servidor está temporalmente caído | Pendiente | Existe endpoint `/health`, no una página de estado amigable/fallback independiente. |
+| 81 | Guardar grupos como favoritos | Completa | Guardados locales implementados y comprobados; no sincronizan a cuenta. |
+| 82 | Lista guardada asociada a cuenta | Parcial | Lista local existe; sincronización con cuenta no. |
+| 83 | Compartir publicación por WhatsApp | Parcial | Función de compartir usa capacidades del dispositivo/fallback; falta prueba explícita del destino WhatsApp. |
+| 84 | Aviso si se publica enlace duplicado | Completa | Aviso no bloqueante antes del envío y verificación de backend; comprobado sin publicar. |
+| 85 | Copiar enlace de invitación | Parcial | Botón y lógica desplegados; prueba automatizada integral de portapapeles no consta. |
+| 86 | Sugerir una categoría que falta | Pendiente | No hay formulario de sugerencias de categorías. |
+| 87 | Formulario para sugerir mejoras/reportar errores | Pendiente | No hay canal/formulario dedicado de feedback del producto. |
+| 88 | Estadísticas para quien publica | Pendiente | No hay panel de métricas del autor. |
+| 89 | Grupos vistos recientemente en el dispositivo | Completa | Historial local de vistos recientes implementado; se ha probado en navegador. |
+| 90 | Marcar grupo como inactivo | Parcial | Estado abierto/cerrado y reportar enlace inválido existen; no hay estado “inactivo/expirado” independiente. |
+| 91 | Copias de seguridad periódicas de base | Pendiente | No hay backup periódico configurado/verificado; Free Postgres no ofrece backups administrados según documentación consultada. |
+| 92 | Documentar cómo restaurar copias | Parcial | Se documentó `pg_dump` como posible exportación, pero no existe procedimiento completo de restauración probado. |
+| 93 | Página de estado del servicio | Parcial | `/health` informa DB; no hay página pública de estado/avisos. |
+| 94 | Pruebas automáticas para registro/publicación/comentarios/borrado | Parcial | Hay pruebas acotadas; los flujos positivos no están cubiertos con DB/fixtures aislados. |
+| 95 | Versión de prueba antes de publicar | Pendiente | Los cambios se despliegan desde main; no hay staging demostrado. |
+| 96 | Registrar errores sin contraseñas/datos sensibles | Parcial | No se completó auditoría de logs/redacción; no afirmar cumplimiento integral. |
+| 97 | Vigilar almacenamiento antes de llenarse | Parcial | Límites de solicitudes/imágenes existen; no hay monitor/alerta de capacidad configurado. |
+| 98 | Planificar migración antes del vencimiento del PostgreSQL temporal | Parcial | Vencimiento conocido 2026-12-26; export/migración/restauración no completados. |
+| 99 | Política de privacidad y condiciones simples | Parcial | Página informativa borrador publicada; no es documento legal final ni asesoría jurídica. |
+| 100 | Priorizar por etapas y verificar en producción | Parcial | Se trabajó por tandas y varias se verificaron en producción; muchas requieren pruebas positivas y no se completó toda la lista. |
+
+**Pendientes de mayor impacto/urgencia:** exportar y verificar restauración del PostgreSQL antes del vencimiento reportado 2026-12-26; resolver la configuración del titular para Google OAuth/correo/SMS y token de moderación; crear fixture desechable con limpieza fiable para pruebas positivas; no reconstruir el comentario id 5 sin backup confiable y autorización. La lista sigue siendo una propuesta amplia: las funciones bloqueadas no se activan sin credenciales/configuración y algunas (por ejemplo, panel de moderación, staging, backup automático) requieren decisiones o servicios adicionales.
