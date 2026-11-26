@@ -78,6 +78,8 @@ Public sharing currently remains hash-based (`/#grupo-<id>`); direct SSR/SEO gro
 25. [~] Add related-group suggestions on a group's detail view, limited to four visible listings in the same category. API returns an empty array safely when no matches exist; the live directory currently has one visible group, so positive multi-match rendering remains unverified without creating data.
 26. [x] Add a user-triggered “Copiar invitación” action on group detail pages with clipboard API plus legacy copy fallback and an accessible success/error status. Checked the deployed live page without submitting forms or changing group data.
 
+29. [~] Add a public Spanish help page linked from the directory footer, explaining search and open/closed semantics, publication/account basics, user-submitted content, safe invitation use, and the current limitations of reports and moderation. Implemented locally; deployment and read-only production verification are pending.
+
 ## Comment-report intake follow-up (2026-11-26)
 - Commit `480bef167a0e7f8fdac0228a3881e7e69c0075fb` (parent `069831edb7db93058d78120cd7d33622e316e9ca`): deployed a dedicated per-comment report form and same-origin API. Adds an additive `target_type`/`comment_id` schema migration, reports reuse the 3/hour/IP limiter, 100-open/group/day cap and 2,000-open global cap; only the protected moderation queue receives target references, never reporter identity. Existing group reports remain tagged as `group`. README and draft legal page now disclose comment reports and that moderation is disabled until configured. No moderation token or secret was set.
 - Local Node v20 `--check` passed for `server.js` and extracted inline JavaScript; Python HTML parsing passed for `public/index.html` and `public/legal.html`.

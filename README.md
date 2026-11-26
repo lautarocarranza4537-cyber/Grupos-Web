@@ -58,6 +58,10 @@ En la ficha de cada grupo se sugieren hasta cuatro publicaciones públicas de la
 Los formularios validan campos y enlaces HTTP(S), procesan las imágenes para reducir su tamaño, limitan el tamaño de la solicitud, limitan la frecuencia de publicaciones e intentos de cuenta y verifican acciones por sesión. El directorio es público y cualquiera puede ver sus perfiles. Los comentarios anónimos siguen siendo públicos, pero solo una cuenta que publicó un comentario con su perfil puede editarlo o borrarlo; las respuestas requieren iniciar sesión, se limitan a un nivel y quedan asociadas al grupo y al comentario raíz. Borrar un comentario raíz también borra sus respuestas. Se pueden denunciar publicaciones/grupos y comentarios individuales; las denuncias no son públicas y no incluyen información del denunciante en la cola privada. La cola de moderación permanece deshabilitada hasta que el responsable configure un secreto seguro.
 
 
+## Ayuda pública
+
+La página `/ayuda.html` reúne instrucciones sobre búsqueda, estados de membresía, publicación, cuentas y precauciones al abrir invitaciones. También aclara que el contenido es aportado por usuarios, que las denuncias no garantizan respuesta y que la cola privada de revisión sigue deshabilitada hasta configurar el secreto requerido. Es información de uso; no se presenta como canal de soporte ni como política legal.
+
 ## Denuncias y moderación
 
 Las denuncias de publicaciones y comentarios se validan por motivo, se limitan conjuntamente a 3 por hora y dirección de origen, y tienen un tope de 100 abiertas por grupo y 2.000 en total. Se asocian al objeto denunciado y, si existe, al usuario autenticado; la lista privada no revela la identidad del denunciante. Para habilitar la cola privada de moderación, configurá en el entorno del servicio una variable `MODERATION_TOKEN` de al menos 32 caracteres aleatorios y mantenela fuera del repositorio, el navegador, las URLs y los mensajes. Sin esa variable, los endpoints privados devuelven 503 y no hay interfaz administrativa pública. Ver `MODERATION.md` para el uso de la API protegida.
