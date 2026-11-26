@@ -2,8 +2,20 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#10131c">
-  <meta name="description" content="Descubrí y compartí grupos públicos de WhatsApp y comunidades.">
-  <title>Grupos Web — descubrí tu próxima comunidad</title>
+  <meta name="description" content="Encontrá grupos de WhatsApp para unirte por tus intereses. Explorá comunidades y publicá gratis el enlace de invitación de tu grupo en Grupos Web.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://grupos-web.onrender.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_AR">
+  <meta property="og:site_name" content="Grupos Web">
+  <meta property="og:title" content="Grupos de WhatsApp para unirte | Grupos Web">
+  <meta property="og:description" content="Descubrí comunidades de WhatsApp por intereses y compartí tu grupo gratis.">
+  <meta property="og:url" content="https://grupos-web.onrender.com/">
+  <meta name="twitter:card" content="summary">
+  <title>Grupos de WhatsApp para unirte | Grupos Web</title>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebSite","name":"Grupos Web","url":"https://grupos-web.onrender.com/","inLanguage":"es-AR","description":"Directorio para descubrir y compartir grupos públicos de WhatsApp y comunidades."}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -14,6 +26,7 @@
     /* Directorio oscuro y transiciones suaves */
     :root{color-scheme:dark}
     .content{background:radial-gradient(ellipse at 80% 0%,#241d3c 0%,#111522 42%,#0b0e17 100%);color:#f5f6fa}
+    .directory-guide{max-width:780px;margin:56px auto 0;padding:26px 0 0;border-top:1px solid #ffffff1a;color:#c6cada}.directory-guide h2{font:700 clamp(24px,3vw,32px)/1.2 var(--display);letter-spacing:-.8px;color:#f5f6fa;margin:0 0 14px}.directory-guide h3{font:600 17px var(--display);color:#e8eaf1;margin:22px 0 7px}.directory-guide p{font-size:14px;line-height:1.8;margin-bottom:12px}.directory-guide strong{color:#d4ff63}.directory-guide a{color:#d4ff63;text-decoration:underline;text-underline-offset:3px}
     .expiry-notice{margin:0 0 26px;padding:15px 18px;border:1px solid #d4ff6352;border-radius:11px;background:linear-gradient(110deg,#d4ff6310,#a68cff13);color:#e4e7ef;font-size:13px;box-shadow:0 10px 35px #0002}
     .expiry-notice strong{color:#d4ff63}.expiry-notice b{color:#fff}.expiry-notice p{margin:4px 0 0;color:#b9bfd0;font-size:12px}
     .expiry-publish{margin-top:20px;padding:13px 14px;border-left:2px solid #d4ff63;background:#d4ff630a;color:#cbd1df;font-size:11px}
@@ -38,8 +51,17 @@
 <body>
   <header class="topbar"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><a class="top-link" href="#publicar">Publicar un grupo ↗</a></header>
   <main id="inicio">
-    <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> COMUNIDADES PARA ENCONTRARTE</div><h1>Tu próxima<br><span>comunidad</span> está acá.</h1><p>Explorá grupos, conocé de qué van y sumate con un toque.</p><a class="button button-primary" href="#explorar">Explorar grupos <span>↓</span></a></div><div class="hero-art" aria-hidden="true"><div class="orb one"></div><div class="orb two"></div><div class="orbit"></div><div class="orbit alt"></div><div class="hero-g">G</div><div class="float-tag tag-a">✦ gente nueva</div><div class="float-tag tag-b">● comunidad</div></div><div class="hero-bottom"><span>UN LUGAR PARA CADA INTERÉS</span><span class="hero-line"></span><span>01 — 03</span></div></section>
-    <section class="content" id="explorar"><aside class="expiry-notice" role="note"><strong>Base temporal:</strong> esta base gratuita de Render vence a los <b>30 días</b>. <p>Si el sitio queda inactivo, los grupos podrían dejar de verse y tal vez haya que volver a publicarlos cuando se reactive. Guardá la descripción y el enlace de tu grupo.</p></aside><div class="section-head"><div><div class="eyebrow muted">DIRECTORIO ABIERTO</div><h2>Encontrá tu grupo</h2></div><span class="count" id="count">Cargando…</span></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscá por nombre, descripción o categoría…" autocomplete="off"></label><div class="status" id="status" role="status">Conectando con el directorio…</div><div class="grid" id="grid"></div><div class="empty" id="empty" hidden><h3>Todavía no hay grupos por acá</h3><p>Podés ser la primera persona en compartir uno.</p></div></section>
+    <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> COMUNIDADES PARA ENCONTRARTE</div><h1>Tu próxima<br><span>comunidad</span> de WhatsApp.</h1><p>Encontrá grupos de WhatsApp para unirte, explorá comunidades por tus intereses y compartí la tuya.</p><a class="button button-primary" href="#explorar">Explorar grupos <span>↓</span></a></div><div class="hero-art" aria-hidden="true"><div class="orb one"></div><div class="orb two"></div><div class="orbit"></div><div class="orbit alt"></div><div class="hero-g">G</div><div class="float-tag tag-a">✦ gente nueva</div><div class="float-tag tag-b">● comunidad</div></div><div class="hero-bottom"><span>UN LUGAR PARA CADA INTERÉS</span><span class="hero-line"></span><span>01 — 03</span></div></section>
+    <section class="content" id="explorar"><aside class="expiry-notice" role="note"><strong>Base temporal:</strong> esta base gratuita de Render vence a los <b>30 días</b>. <p>Si el sitio queda inactivo, los grupos podrían dejar de verse y tal vez haya que volver a publicarlos cuando se reactive. Guardá la descripción y el enlace de tu grupo.</p></aside><div class="section-head"><div><div class="eyebrow muted">DIRECTORIO ABIERTO</div><h2>Encontrá tu grupo</h2></div><span class="count" id="count">Cargando…</span></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscá por nombre, descripción o categoría…" autocomplete="off"></label><div class="status" id="status" role="status">Conectando con el directorio…</div><div class="grid" id="grid"></div><div class="empty" id="empty" hidden><h3>Todavía no hay grupos por acá</h3><p>Podés ser la primera persona en compartir uno.</p></div>
+      <section class="directory-guide" aria-labelledby="guide-title">
+        <h2 id="guide-title">Encontrá grupos de WhatsApp para tus intereses</h2>
+        <p>Grupos Web es un directorio abierto para descubrir comunidades de WhatsApp y compartir grupos públicos. Buscá por nombre, categoría o descripción para encontrar espacios sobre temas que te interesan.</p>
+        <h3>¿Cómo me uno a un grupo?</h3>
+        <p>Elegí una publicación, leé de qué se trata y tocá <strong>Unirme al grupo</strong> para abrir el enlace de invitación. Revisá las reglas del grupo antes de participar.</p>
+        <h3>¿Puedo publicar mi grupo de WhatsApp?</h3>
+        <p>Sí. <a href="#publicar">Publicá tu grupo gratis</a> con su nombre, categoría, descripción y enlace público para que otras personas puedan encontrarlo.</p>
+      </section>
+    </section>
     <section class="publish" id="publicar"><div class="publish-intro"><div class="eyebrow">SUMÁ TU COMUNIDAD</div><h2>Tu grupo también<br>tiene lugar acá.</h2><p>Completá el perfil y compartilo con todos. Una buena descripción ayuda a que la gente encuentre el grupo indicado.</p><div class="note"><b>✦</b> Tu publicación será pública. No incluyas datos personales. Cualquiera podrá verla y sumarse.</div><div class="expiry-publish"><strong>Importante:</strong> la base temporal vence a los 30 días. Guardá la información de tu grupo por si luego hay que publicarlo nuevamente.</div></div><form class="form" id="form"><label class="field">Nombre del grupo <strong>*</strong><input name="name" maxlength="70" placeholder="Ej.: Comunidad de fotografía" required></label><label class="field">Categoría<input name="category" maxlength="32" placeholder="Ej.: Fotografía, juegos, estudio…"></label><label class="field wide">Descripción <strong>*</strong><textarea name="description" maxlength="500" rows="4" placeholder="¿De qué se trata? ¿A quién le puede interesar?" required></textarea><small>Hasta 500 caracteres.</small></label><label class="field wide">Foto de perfil del grupo<input class="file-input" id="photo" type="file" accept="image/png,image/jpeg,image/webp"><small>JPG, PNG o WebP. Se ajusta automáticamente.</small><span class="preview-wrap" id="preview-wrap" hidden><img id="preview" alt="Vista previa"><button class="remove-photo" id="remove-photo" type="button">Quitar foto</button></span></label><label class="field wide">Enlace para unirse <strong>*</strong><input name="groupUrl" type="url" placeholder="https://chat.whatsapp.com/…" required><small>Enlace público de invitación.</small></label><button class="button button-primary submit wide" id="submit" type="submit">Publicar grupo <span>↗</span></button><p class="feedback wide" id="feedback" role="status"></p></form></section>
   </main>
   <footer class="footer"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><span>Un directorio para encontrar tu gente.</span><a href="#inicio">Volver arriba ↑</a></footer>
