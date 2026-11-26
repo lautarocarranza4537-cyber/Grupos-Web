@@ -117,6 +117,7 @@ async function initializeDatabase() {
         id BIGSERIAL PRIMARY KEY,
         name VARCHAR(70) NOT NULL,
         category VARCHAR(32) NOT NULL DEFAULT 'General',
+        language VARCHAR(32) NOT NULL DEFAULT '',
         description VARCHAR(500) NOT NULL,
         image_data TEXT,
         group_url VARCHAR(1000) NOT NULL,
@@ -124,6 +125,7 @@ async function initializeDatabase() {
       )
     `);
     // Additive-only migration: no existing publication is altered or deleted here.
+    await pool.query("ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS language VARCHAR(32) NOT NULL DEFAULT ''");
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS group_url_key TEXT');
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS owner_token_hash TEXT');
     await pool.query('ALTER TABLE groups_public ADD COLUMN IF NOT EXISTS contact_url TEXT');
@@ -332,18 +334,20 @@ function groupPageHtml(group) {
   const title = `${group.name} | Grupo de WhatsApp en Grupos Web`;
   const baseDescription = String(group.description || '').replace(/\s+/g, ' ').trim();
   const rules = String(group.rules || '').replace(/\s+/g, ' ').trim();
+  const language = cleanText(group.language, 32).replace(/\s+/g, ' ');
   const fallbackDescription = 'Descubrí esta comunidad de WhatsApp en Grupos Web.';
   const description = rules
     ? `${(baseDescription || fallbackDescription).slice(0, 200)} · Reglas: ${rules.slice(0, 300 - Math.min((baseDescription || fallbackDescription).length, 200) - 12)}`.slice(0, 300)
     : (baseDescription || fallbackDescription).slice(0, 300);
+  const seoDescription = language ? `${description} · Idioma: ${language}`.slice(0, 300) : description;
   const canonical = `https://grupos-web.onrender.com/grupo/${group.id}`;
-  const jsonLd = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', name: title, description, url: canonical, inLanguage: 'es-AR', isPartOf: { '@type': 'WebSite', name: 'Grupos Web', url: 'https://grupos-web.onrender.com/' } })
+  const jsonLd = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', name: title, description: seoDescription, url: canonical, inLanguage: 'es-AR', ...(language ? { keywords: [language] } : {}), isPartOf: { '@type': 'WebSite', name: 'Grupos Web', url: 'https://grupos-web.onrender.com/' } })
     .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
   let html = publicIndexHtml;
-  html = html.replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escapeHtml(description)}">`);
+  html = html.replace(/<meta name="description" content="[^"]*">/, () => `<meta name="description" content="${escapeHtml(seoDescription)}">`);
   html = html.replace(/<link rel="canonical" href="[^"]*">/, () => `<link rel="canonical" href="${canonical}">`);
   html = html.replace(/<meta property="og:title" content="[^"]*">/, () => `<meta property="og:title" content="${escapeHtml(title)}">`);
-  html = html.replace(/<meta property="og:description" content="[^"]*">/, () => `<meta property="og:description" content="${escapeHtml(description)}">`);
+  html = html.replace(/<meta property="og:description" content="[^"]*">/, () => `<meta property="og:description" content="${escapeHtml(seoDescription)}">`);
   html = html.replace(/<meta property="og:url" content="[^"]*">/, () => `<meta property="og:url" content="${canonical}">`);
   html = html.replace(/<meta name="twitter:card" content="[^"]*">/, () => '<meta name="twitter:card" content="summary">');
   html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
@@ -354,7 +358,7 @@ app.get('/grupo/:id', requireDatabase, async (req, res, next) => {
   const id = /^\d+$/.test(req.params.id) ? req.params.id : '';
   if (!id) return res.status(404).type('text').send('No se encontró la publicación.');
   try {
-    const result = await pool.query('SELECT id, name, category, description, rules FROM groups_public WHERE id=$1 AND moderation_hidden=FALSE LIMIT 1', [id]);
+    const result = await pool.query('SELECT id, name, category, language, description, rules FROM groups_public WHERE id=$1 AND moderation_hidden=FALSE LIMIT 1', [id]);
     if (!result.rowCount) return res.status(404).type('text').send('No se encontró la publicación.');
     res.type('html').send(groupPageHtml(result.rows[0]));
   } catch (error) { next(error); }
@@ -451,7 +455,7 @@ app.post('/api/auth/logout', requireDatabase, requireSameOrigin, async (req, res
 app.get('/api/groups', requireDatabase, optionalAuth, async (req, res, next) => {
   try {
     const result = await pool.query(`
-      SELECT g.id, g.name, g.category, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
+      SELECT g.id, g.name, g.category, g.language, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
              ROUND(AVG(r.rating)::numeric, 1) AS rating_average,
              COUNT(r.id)::int AS rating_count,
              COALESCE(MAX(CASE WHEN r.user_id=$1 THEN r.rating END),0)::int AS my_rating,
@@ -467,6 +471,7 @@ app.get('/api/groups', requireDatabase, optionalAuth, async (req, res, next) => 
 app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requireUser, limitPosts, async (req, res, next) => {
   const name = cleanText(req.body && req.body.name, 70);
   const category = cleanText(req.body && req.body.category, 32) || 'General';
+  const language = cleanText(req.body && req.body.language, 32);
   const description = cleanText(req.body && req.body.description, 500);
   const rules = cleanText(req.body && req.body.rules, 1200);
   const publicationStatus = req.body && req.body.publicationStatus !== undefined ? req.body.publicationStatus : 'active';
@@ -489,10 +494,10 @@ app.post('/api/groups', requireDatabase, requireSameOrigin, optionalAuth, requir
     const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 LIMIT 1', [groupUrlKey]);
     if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
     const result = await client.query(`
-      INSERT INTO groups_public (name, category, description, rules, publication_status, image_data, group_url, group_url_key, contact_url, owner_user_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING id, name, category, description, rules, publication_status, image_data, group_url, contact_url, created_at
-    `, [name, category, description, rules, publicationStatus, imageData || null, groupUrl, groupUrlKey, contactUrl || null, req.user.id]);
+      INSERT INTO groups_public (name, category, language, description, rules, publication_status, image_data, group_url, group_url_key, contact_url, owner_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      RETURNING id, name, category, language, description, rules, publication_status, image_data, group_url, contact_url, created_at
+    `, [name, category, language, description, rules, publicationStatus, imageData || null, groupUrl, groupUrlKey, contactUrl || null, req.user.id]);
     await client.query('COMMIT');
     res.status(201).json({ ...result.rows[0], rating_average: null, rating_count: 0, my_rating: 0, is_owner: true });
   } catch (error) {
@@ -507,7 +512,7 @@ app.get('/api/groups/:id', requireDatabase, optionalAuth, async (req, res, next)
   if (!id) return res.status(404).json({ error: 'No se encontró la publicación.' });
   try {
     const result = await pool.query(`
-      SELECT g.id, g.name, g.category, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
+      SELECT g.id, g.name, g.category, g.language, g.description, g.rules, g.publication_status, g.image_data, g.group_url, g.contact_url, g.created_at,
              ROUND(AVG(r.rating)::numeric, 1) AS rating_average, COUNT(r.id)::int AS rating_count,
              COALESCE(MAX(CASE WHEN r.user_id=$2 THEN r.rating END),0)::int AS my_rating,
              (g.owner_user_id=$2) AS is_owner
@@ -737,6 +742,8 @@ app.patch('/api/groups/:id', requireDatabase, requireSameOrigin, optionalAuth, r
   if (!id) return res.status(400).json({ error: 'Publicación inválida.' });
   const name = cleanText(req.body && req.body.name, 70);
   const category = cleanText(req.body && req.body.category, 32) || 'General';
+  const hasLanguage = Object.prototype.hasOwnProperty.call(req.body || {}, 'language');
+  const language = hasLanguage ? cleanText(req.body.language, 32) : null;
   const description = cleanText(req.body && req.body.description, 500);
   const rules = cleanText(req.body && req.body.rules, 1200);
   const hasPublicationStatus = Object.prototype.hasOwnProperty.call(req.body || {}, 'publicationStatus');
@@ -761,11 +768,12 @@ app.patch('/api/groups/:id', requireDatabase, requireSameOrigin, optionalAuth, r
     const duplicate = await client.query('SELECT id FROM groups_public WHERE group_url_key=$1 AND id<>$2 LIMIT 1', [groupUrlKey, id]);
     if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Este enlace de grupo o team ya fue subido.' }); }
     const result = await client.query(`UPDATE groups_public SET name=$1,category=$2,description=$3,rules=$4,
-      image_data=CASE WHEN $5 THEN NULLIF($6,'') ELSE image_data END, group_url=$7,group_url_key=$8,contact_url=NULLIF($9,''),
-      publication_status=CASE WHEN $10 THEN $11 ELSE publication_status END
-      WHERE id=$12 AND owner_user_id=$13
-      RETURNING id,name,category,description,rules,publication_status,image_data,group_url,contact_url,created_at`,
-      [name,category,description,rules,hasImage,imageData,groupUrl,groupUrlKey,contactUrl,hasPublicationStatus,publicationStatus,id,req.user.id]);
+      language=CASE WHEN $5 THEN $6 ELSE language END,
+      image_data=CASE WHEN $7 THEN NULLIF($8,'') ELSE image_data END, group_url=$9,group_url_key=$10,contact_url=NULLIF($11,''),
+      publication_status=CASE WHEN $12 THEN $13 ELSE publication_status END
+      WHERE id=$14 AND owner_user_id=$15
+      RETURNING id,name,category,language,description,rules,publication_status,image_data,group_url,contact_url,created_at`,
+      [name,category,description,rules,hasLanguage,language,hasImage,imageData,groupUrl,groupUrlKey,contactUrl,hasPublicationStatus,publicationStatus,id,req.user.id]);
     if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Solo quien publicó este grupo puede editarlo.' }); }
     await client.query('COMMIT');
     const stats = await pool.query('SELECT ROUND(AVG(rating)::numeric,1) AS rating_average, COUNT(*)::int AS rating_count, COALESCE(MAX(CASE WHEN user_id=$2 THEN rating END),0)::int AS my_rating FROM group_ratings WHERE group_id=$1', [id,req.user.id]);
