@@ -375,3 +375,37 @@ Estados: **Completa** = comportamiento implementado y evidencia de despliegue/pr
 - Después del seguimiento responsive se volvió a cargar el sitio en producción: la preferencia oscura sobrevivió la recarga, se mostró la etiqueta corta «Oscuro», y `/health` siguió listo. No se reportaron errores de consola.
 - Validación local: Python `HTMLParser` aceptó el HTML y no encontró IDs duplicados (118 únicos); las llaves CSS balancean (441 pares). Este entorno no tiene Node.js, por lo que no se afirma una comprobación local `node --check`; el script se ejecutó en el navegador de producción.
 - Al pasar únicamente la propuesta #2 de **Pendiente** a **Completa**, el cruce total actualizado de las 100 propuestas queda en **25 completas, 47 parciales, 24 pendientes y 4 bloqueadas**.
+
+## Mobile-safe visual and motion polish batch (2026-11-27)
+
+This batch records **20 incremental frontend polish refinements**, not 20 new product/backend capabilities. It intentionally does not duplicate or mark complete any feature in the numbered 100-proposal crosswalk; no row status or crosswalk total changed. Existing layout, filtering, theme persistence, account flows and form behavior remain as before.
+
+1. Added viewport-fit and safe-area handling for iPhone notch/home-indicator insets.
+2. Sized group/account dialogs against dynamic viewport height, with a viewport-height fallback.
+3. Contained dialog overscroll to avoid scrolling the page behind a modal.
+4. Added shared, restrained ease-out/spring timing tokens.
+5. Added a short, subtle opacity/scale/translate entrance for dialogs.
+6. Refined dialog backdrop blur and its entrance fade without changing dismissal behavior.
+7. Kept the existing dialog close control sticky/reachable while scrolling.
+8. Harmonized press feedback for existing buttons/controls; no haptic API or unsupported vibration behavior was added.
+9. Limited lift/zoom hover effects to fine-pointer devices and removed them on touch/coarse pointers.
+10. Added a consistent keyboard-visible focus outline without changing semantic controls.
+11. Smoothed card elevation/border changes without changing card activation.
+12. Faded supported content images in after load/decode and preserved visible fallbacks.
+13. Added a very small card-image scale on fine-pointer hover only.
+14. Added a short favorite-button pop only after an explicit toggle; favorite storage and semantics are unchanged.
+15. Refined the existing search focus glow.
+16. Refined existing select/filter focus and border transitions.
+17. Extended reduced-motion handling to every new transition/animation and disabled scroll reveals when the system requests reduced motion.
+18. Added a one-time, low-distance reveal to static sections only; forms, controls and result cards are not hidden/revealed. Unsupported observers leave content visible.
+19. Reduced backdrop blur on narrow screens to lower mobile rendering cost.
+20. Added restrained color transitions to light/dark theme surfaces without changing the stored theme preference.
+
+### Scope and limits
+- Source commit `f526b141fb01b46d61815ad05ae232db1d0cfc29`, parent `da8e743a9abc5116ba2de2108fe88f846ac51e18`, changed only `public/index.html`; main was read immediately before the fast-forward and matched the expected parent.
+- Production homepage returned HTTP 200 and served the unique new CSS/JS markers from the source commit; `/health` returned HTTP 200 `{"ok":true,"database":"ready"}`. This verifies the frontend source is live and DB readiness, not a full backend/regression suite.
+- Production browser smoke: theme toggled to light and restored to dark; an existing category filter was selected then reset; the live group dialog opened, scrolled to its comment composer, and closed. Forms were not submitted. No group/comment/account/rating/report write endpoint was called. Browser console contained no errors after the smoke. Opening the live detail may update the browser-local recent-view list, as in existing behavior.
+- Local Python HTML parsing passed with 118 unique IDs; CSS braces were balanced. The inline script ran in the production browser without console errors. This environment had no Node.js executable, so no standalone `node --check` was possible.
+- Mobile safe-area and responsive rules were implemented, but this session did not have a mobile viewport emulator; mobile visual behavior was not claimed as browser-tested. Unsupported CSS/observer features fall back to the current layout.
+- No database/content/API/configuration changes, new account, test post, test comment, or service-plan/secret change was made. The original 100-proposal crosswalk remains **25 complete, 47 partial, 24 pending, and 4 blocked**; this tally was deliberately left unchanged.
+
