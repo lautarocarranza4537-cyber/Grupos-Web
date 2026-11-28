@@ -305,6 +305,13 @@
     .card-body{padding:12px}
     @media(max-width:620px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card-img{height:95px}.card-body{padding:10px}.card-body h3{font-size:16px;overflow-wrap:anywhere}.card-top{gap:4px}.card-rating{font-size:10px}}
     @media(max-width:300px){.grid{grid-template-columns:1fr}}
+    /* Directory tiles: cover and title only; details and favorites stay in the group. */
+    .grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr));gap:12px}
+    .card-img{height:88px}
+    .card-body{padding:9px 10px}
+    .card h3{font-size:15px;line-height:1.25;margin:0;overflow-wrap:anywhere}
+    @media(max-width:620px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card-img{height:78px}.card-body{padding:8px}.card-body h3{font-size:14px}}
+    @media(max-width:300px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -448,7 +455,45 @@
   const isFavorite = g => readList(FAVORITES_KEY).includes(String(g.id));
   const toggleFavorite = g => { const id=String(g.id), list=readList(FAVORITES_KEY), next=list.includes(id)?list.filter(x=>x!==id):[...list,id];writeList(FAVORITES_KEY,next);render();const card=[...grid.querySelectorAll('.card')].find(item=>item.dataset.groupId===id),button=card&&card.querySelector('.favorite-card');if(button){button.classList.remove('favorite-pop');void button.offsetWidth;button.classList.add('favorite-pop');button.addEventListener('animationend',()=>button.classList.remove('favorite-pop'),{once:true});}if(String(openCommentGroup)===id)syncFavoriteButton(g); };
   function syncFavoriteButton(g){const b=$('#favorite-group');if(!b)return;const saved=isFavorite(g);b.setAttribute('aria-pressed',String(saved));b.textContent=saved?'♥ Guardado':'♡ Guardar grupo';}
-  function refreshCategories(){const sel=$('#category-filter'),current=sel.value,values=[...new Set(groups.map(g=>String(g.category||'General').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));sel.replaceChildren(new Option('Todas las categorías',''));for(const v of values)sel.add(new Option(v,v));if(values.includes(current))sel.value=current;}
+  // Preset topics supplement, not replace, the free-text categories of published groups.
+  const CATEGORY_TOPICS = [
+    ['Amistad y charla',['amistad','amigos','charla','social']],
+    ['Anime y manga',['anime','manga','otaku']],
+    ['Arte y creatividad',['arte','dibujo','pintura','diseno','creativ']],
+    ['Cine y series',['cine','pelicula','series','television']],
+    ['Cocina y gastronomía',['cocina','gastronomia','receta','comida']],
+    ['Compra y venta',['compra','venta','ventas','comercio']],
+    ['Deportes',['deporte','futbol','basquet','tenis']],
+    ['Educación y estudio',['educacion','estudio','estudiantes','escuela','universidad']],
+    ['Empleo y negocios',['empleo','trabajo','negocio','emprend']],
+    ['Fotografía',['fotografia','fotos','fotograf']],
+    ['Humor y memes',['humor','meme','memes']],
+    ['Idiomas',['idioma','idiomas','ingles','portugues']],
+    ['Juegos y videojuegos',['juego','videojuego','gaming','gamer']],
+    ['Lectura y escritura',['lectura','libro','literatura','escritura']],
+    ['Mascotas y animales',['mascota','animal','perros','gatos']],
+    ['Música',['musica','cantante','bandas']],
+    ['Noticias y actualidad',['noticia','actualidad']],
+    ['Salud y bienestar',['salud','bienestar','fitness']],
+    ['Tecnología',['tecnologia','programacion','informatica']],
+    ['Viajes y turismo',['viaje','turismo','viajeros']]
+  ];
+  function categoryMatches(group,value){
+    if(!value)return true;
+    if(!value.startsWith('topic:'))return String(group.category||'General').trim()===value;
+    const topic=CATEGORY_TOPICS.find(([name])=>'topic:'+name===value);
+    const actual=normalizeSearch(String(group.category||'General').trim());
+    return !!topic&&topic[1].some(word=>actual.includes(word));
+  }
+  function refreshCategories(){
+    const sel=$('#category-filter'),current=sel.value,values=[...new Set(groups.map(g=>String(g.category||'General').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+    sel.replaceChildren(new Option('Todas las categorías',''));
+    const topics=document.createElement('optgroup');topics.label='Explorar por tema';
+    for(const [name] of CATEGORY_TOPICS)topics.append(new Option(name,'topic:'+name));
+    sel.append(topics);
+    if(values.length){const published=document.createElement('optgroup');published.label='Categorías publicadas';for(const value of values)published.append(new Option(value,value));sel.append(published);}
+    if([...sel.options].some(o=>o.value===current))sel.value=current;
+  }
   const refreshBlockedButton = () => { const b=$('#toggle-blocked'), n=readList(BLOCK_IDS).length+readList(BLOCK_CONTACTS).length; b.hidden=n===0; b.textContent=showBlocked?'Ocultar publicaciones bloqueadas':'Ver publicaciones bloqueadas'; };
   function refreshLanguages(){const sel=$('#language-filter'),current=sel.value,values=[...new Set(groups.map(g=>String(g.language||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));sel.replaceChildren(new Option('Todos los idiomas',''),new Option('Sin especificar','__none__'));for(const v of values)sel.add(new Option(v,`lang:${encodeURIComponent(v)}`));if([...sel.options].some(o=>o.value===current))sel.value=current;}
   function refreshResetButton(){const active=!!(search.value.trim()||$('#category-filter').value||$('#language-filter').value||$('#publication-filter').value||$('#sort-groups').value!=='newest'||favoritesOnly||showBlocked);$('#reset-filters').disabled=!active;}
@@ -509,7 +554,7 @@
     const q=normalizeSearch(search.value.trim()), category=$('#category-filter').value, languageFilter=$('#language-filter').value, publicationFilter=$('#publication-filter').value, sort=$('#sort-groups').value;
     refreshCategories();refreshLanguages();
     const selectedLanguage=languageFilter.startsWith('lang:')?decodeURIComponent(languageFilter.slice(5)):'';
-    let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && (!category||String(g.category||'General')===category) && (!languageFilter||(languageFilter==='__none__'?!String(g.language||'').trim():String(g.language||'').trim()===selectedLanguage)) && (!publicationFilter||String(g.publication_status||'active')===publicationFilter) && normalizeSearch(`${g.name} ${g.category} ${String(g.language||'').trim()||'Sin especificar'} ${g.description} ${g.rules||''} ${g.publication_status==='closed'?'cerrado cerrada cerrado a nuevos miembros':'abierto abierta abierto a nuevos miembros'}`).includes(q));
+    let result=groups.filter(g => (showBlocked || !isBlocked(g)) && (!favoritesOnly||isFavorite(g)) && categoryMatches(g,category) && (!languageFilter||(languageFilter==='__none__'?!String(g.language||'').trim():String(g.language||'').trim()===selectedLanguage)) && (!publicationFilter||String(g.publication_status||'active')===publicationFilter) && normalizeSearch(`${g.name} ${g.category} ${String(g.language||'').trim()||'Sin especificar'} ${g.description} ${g.rules||''} ${g.publication_status==='closed'?'cerrado cerrada cerrado a nuevos miembros':'abierto abierta abierto a nuevos miembros'}`).includes(q));
     const recent=readList(RECENT_KEY); result.sort((a,b)=> sort==='rating'?(Number(b.rating_average||0)-Number(a.rating_average||0)):sort==='rated'?(Number(b.rating_count||0)-Number(a.rating_count||0)):sort==='name'?String(a.name).localeCompare(String(b.name),'es'):sort==='recent'?(recent.indexOf(String(a.id))<0?1:recent.indexOf(String(b.id))<0?-1:recent.indexOf(String(a.id))-recent.indexOf(String(b.id))):new Date(b.created_at||0)-new Date(a.created_at||0));
     refreshBlockedButton(); refreshResetButton(); refreshFavoritesFilterButton(); saveFilterPreferences();
     count.textContent=`${result.length} ${result.length===1?'grupo':'grupos'}`;
@@ -520,11 +565,8 @@
     for (const g of result) {
       const card=document.createElement('article'); card.className='card'; card.dataset.groupId=String(g.id);
       const img=(typeof g.image_data==='string'&&/^data:image\/(jpeg|png|webp);base64,/.test(g.image_data))?g.image_data:fallback;
-      const closed=g.publication_status==='closed', statusLabel=closed?'Cerrado a nuevos miembros':'Abierto a nuevos miembros';
-      const avg=Number(g.rating_average)||0, starDisplay=avg?`<span class="card-rating" aria-label="Calificación ${avg.toFixed(1)} de 5">★ ${avg.toFixed(1)} · ${Number(g.rating_count)||0}</span>`:`<span class="card-rating">Sin votos</span>`;
-      card.innerHTML=`<button type="button" class="card-open" aria-label="Ver ${esc(g.name)}"></button><button type="button" class="favorite-card" aria-label="${isFavorite(g)?'Quitar de guardados':'Guardar grupo'}" aria-pressed="${isFavorite(g)}">${isFavorite(g)?'♥':'♡'}</button><img class="card-img" src="${esc(img)}" alt="Foto de ${esc(g.name)}" loading="lazy" decoding="async"><div class="card-body"><div class="card-top"><span class="pill">${esc(g.category||'General')}</span>${starDisplay}</div><h3>${esc(g.name)}</h3><p class="publication-status card-status${closed?' closed':''}">${statusLabel}</p><p class="card-language">Idioma: ${esc(String(g.language||'').trim()||'Sin especificar')}</p><p>${esc(g.description)}</p><p class="card-date">Publicado ${g.created_at?new Date(g.created_at).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'}):''}</p></div>`;
-      card.querySelector('img').addEventListener('error',e=>e.currentTarget.src=fallback);
-      card.querySelector('.favorite-card').addEventListener('click',e=>{e.stopPropagation();toggleFavorite(g);});
+      card.innerHTML=`<button type="button" class="card-open" aria-label="Ver ${esc(g.name)}"></button><img class="card-img" src="${esc(img)}" alt="Foto de ${esc(g.name)}" loading="lazy" decoding="async"><div class="card-body"><h3>${esc(g.name)}</h3></div>`;
+      card.querySelector('img').addEventListener('error',e=>{e.currentTarget.onerror=null;e.currentTarget.src=fallback;});
       card.querySelector('.card-open').addEventListener('click',()=>openGroup(g)); grid.append(card);
     }
   }
