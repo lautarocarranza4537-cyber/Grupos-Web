@@ -289,7 +289,7 @@
     @media print{.holiday-player{display:none!important}}
   
     /* Thin decorative snow caps sit above selected controls, but never intercept taps. */
-    .snow-capped{position:relative!important;isolation:isolate}
+    .snow-capped{position:relative;isolation:isolate}
     .snow-capped::after{content:"";position:absolute;z-index:2;pointer-events:none;left:4px;right:4px;top:0;height:7px;border-radius:58% 42% 48% 52% / 100% 90% 45% 40%;background:linear-gradient(180deg,#fff 0%,#f7fbff 55%,#dce8f3 100%);box-shadow:0 1px 2px #09111d55,0 0 5px #fff8;opacity:.94}
     .holiday-player{box-sizing:border-box;resize:none;overflow:hidden;display:flex;flex-direction:column;min-width:190px;min-height:150px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);padding-bottom:18px}
     .holiday-player[hidden]{display:none!important}
@@ -298,6 +298,13 @@
     .holiday-player-resize{position:absolute;right:2px;bottom:1px;width:20px;height:20px;z-index:2;border:0;border-radius:0 0 10px 0;background:linear-gradient(135deg,transparent 45%,#c5d9ed 46%,#c5d9ed 54%,transparent 55%),linear-gradient(135deg,transparent 61%,#ffffffcc 62%,#ffffffcc 70%,transparent 71%);cursor:nwse-resize;touch-action:none}
     .holiday-player-resize:focus-visible{outline:2px solid #f7d978;outline-offset:-2px}
     @media(prefers-reduced-motion:reduce){.snow-capped::after{box-shadow:0 1px 2px #09111d55}}
+  
+    /* Compact directory cards: keep covers visible and make room for more results. */
+    .grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:14px}
+    .card-img{height:118px}
+    .card-body{padding:12px}
+    @media(max-width:620px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card-img{height:95px}.card-body{padding:10px}.card-body h3{font-size:16px;overflow-wrap:anywhere}.card-top{gap:4px}.card-rating{font-size:10px}}
+    @media(max-width:300px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -395,7 +402,7 @@
     resizeHandle.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const r=player.getBoundingClientRect(),step=e.shiftKey?40:16;if(e.key==='ArrowRight')player.style.width=clamp(r.width+step,190,innerWidth-16)+'px';if(e.key==='ArrowLeft')player.style.width=clamp(r.width-step,190,innerWidth-16)+'px';if(e.key==='ArrowDown')player.style.height=clamp(r.height+step,150,innerHeight-16)+'px';if(e.key==='ArrowUp')player.style.height=clamp(r.height-step,150,innerHeight-16)+'px';clampPlayer();savePlayerPrefs();});
     const playerObserver=new ResizeObserver(savePlayerPrefs);playerObserver.observe(player);
     window.addEventListener('resize',()=>{clampPlayer();savePlayerPrefs();},{passive:true});
-    function capSnowButtons(root=document){root.querySelectorAll?.('button:not(.holiday-player-close):not(.holiday-player-resize),a.button').forEach(el=>el.classList.add('snow-capped'));if(root.matches?.('button:not(.holiday-player-close):not(.holiday-player-resize),a.button'))root.classList.add('snow-capped');}
+    function capSnowButtons(root=document){const selector='.holiday-control,.account-button,.theme-toggle,.tool-button,.button-primary,.submit';root.querySelectorAll?.(selector).forEach(el=>el.classList.add('snow-capped'));if(root.matches?.(selector))root.classList.add('snow-capped');}
     capSnowButtons();document.addEventListener('DOMContentLoaded',()=>capSnowButtons(),{once:true});
     const capObserver=new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1)capSnowButtons(n);})));capObserver.observe(document.body,{childList:true,subtree:true});
     window.addEventListener('pagehide',()=>{stopSnow();playerFrame.removeAttribute('src');playerObserver.disconnect();capObserver.disconnect();},{once:true});
