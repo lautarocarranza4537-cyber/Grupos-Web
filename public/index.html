@@ -291,7 +291,7 @@
     /* Thin decorative snow caps sit above selected controls, but never intercept taps. */
     .snow-capped{position:relative!important;isolation:isolate}
     .snow-capped::after{content:"";position:absolute;z-index:2;pointer-events:none;left:4px;right:4px;top:0;height:7px;border-radius:58% 42% 48% 52% / 100% 90% 45% 40%;background:linear-gradient(180deg,#fff 0%,#f7fbff 55%,#dce8f3 100%);box-shadow:0 1px 2px #09111d55,0 0 5px #fff8;opacity:.94}
-    .holiday-player{box-sizing:border-box;resize:both;overflow:hidden;display:flex;flex-direction:column;min-width:190px;min-height:150px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);padding-bottom:18px}
+    .holiday-player{box-sizing:border-box;resize:none;overflow:hidden;display:flex;flex-direction:column;min-width:190px;min-height:150px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);padding-bottom:18px}
     .holiday-player[hidden]{display:none!important}
     .holiday-player-head{flex:0 0 auto;min-height:32px;padding:2px 3px;touch-action:none;cursor:move;user-select:none;-webkit-user-select:none}
     #holiday-player-frame{flex:1 1 auto;min-height:80px;height:auto;aspect-ratio:auto}
