@@ -279,14 +279,14 @@
     @media(prefers-reduced-motion:reduce){.holiday-rails span{animation:none!important}}
     @media print{.holiday-rails,.holiday-garland,.holiday-scene,.holiday-snow,.holiday-controls{display:none!important}}
 
-    .holiday-player-dialog{width:min(560px,calc(100vw - 24px));max-width:none;max-height:90vh;padding:16px;border:1px solid #ffffff28;border-radius:18px;background:#151925;color:#f7f7fb;box-shadow:0 24px 90px #000a}
-    .holiday-player-dialog::backdrop{background:#080b13c9;backdrop-filter:blur(5px)}
-    .holiday-player-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px}
-    .holiday-player-head h2{margin:0;font:700 18px var(--sans)}.holiday-player-head p{margin:4px 0 0;color:#c3c8d5;font:12px var(--sans)}
-    .holiday-player-close{flex:none;width:38px;height:38px;border:1px solid #ffffff35;border-radius:50%;background:#ffffff12;color:#fff;font-size:26px;cursor:pointer}
-    #holiday-player-frame{display:block;width:100%;height:auto;min-height:200px;aspect-ratio:16/9;border:0;border-radius:10px;background:#000}
-    @media(max-width:380px){.holiday-player-dialog{padding:12px}.holiday-player-head h2{font-size:16px}}
-    @media print{.holiday-player-dialog{display:none!important}}
+    .holiday-player{position:fixed;z-index:10;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));width:min(280px,calc(100vw - 28px));padding:8px;border:1px solid #ffffff30;border-radius:14px;background:rgba(17,21,34,.95);color:#f7f7fb;box-shadow:0 8px 30px #0007;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+    .holiday-player[hidden]{display:none!important}
+    .holiday-player-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 7px;font:600 12px var(--sans)}
+    .holiday-player-close{flex:none;width:30px;height:30px;border:1px solid #ffffff35;border-radius:50%;background:#ffffff12;color:#fff;font-size:21px;line-height:1;cursor:pointer}
+    #holiday-player-frame{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:8px;background:#000}
+    @media(max-width:380px){.holiday-player{width:min(230px,calc(100vw - 28px));padding:6px}}
+    @media(prefers-reduced-motion:reduce){.holiday-snow{opacity:.5}}
+    @media print{.holiday-player{display:none!important}}
   </style>
 </head>
 <body>
@@ -297,10 +297,10 @@
     <button class="holiday-control" id="holiday-snow-toggle" type="button" aria-pressed="true" aria-label="Desactivar la nieve">❄ Nieve: sí</button>
     <button class="holiday-control" id="holiday-music-toggle" type="button" aria-pressed="false" aria-label="Reproducir Christmas Kids">▶ Christmas Kids</button>
   </div>
-  <dialog class="holiday-player-dialog" id="holiday-player-dialog" aria-labelledby="holiday-player-title">
-    <div class="holiday-player-head"><div><h2 id="holiday-player-title">Christmas Kids</h2><p>Video de YouTube · tocá reproducir si no arranca</p></div><button class="holiday-player-close" id="holiday-player-close" type="button" aria-label="Cerrar reproductor">×</button></div>
-    <iframe id="holiday-player-frame" title="Christmas Kids — YouTube" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-  </dialog>
+  <div class="holiday-player" id="holiday-player" role="region" aria-label="Reproductor de Christmas Kids" hidden>
+    <div class="holiday-player-head"><strong>Christmas Kids</strong><button class="holiday-player-close" id="holiday-player-close" type="button" aria-label="Detener canción y cerrar reproductor">×</button></div>
+    <iframe id="holiday-player-frame" title="Christmas Kids — reproductor de YouTube" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  </div>
 
   <a class="skip-link" href="#explorar">Saltar al directorio</a>
   <header class="topbar"><a class="brand" href="#inicio"><span class="brand-mark">G</span><span>grupos<span class="brand-light">web</span></span></a><div><a class="top-link" href="#publicar">Publicar un grupo ↗</a><button class="account-button" id="account-button" type="button">Entrar / crear cuenta</button><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Tema claro u oscuro" aria-pressed="false">☾ Oscuro</button></div></header>
@@ -331,7 +331,7 @@
       canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const count = Math.min(110, Math.max(44, Math.round(innerWidth / 11)));
-      flakes = Array.from({length: count}, (_,i) => ({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:1.1+Math.random()*2.6,v:.32+Math.random()*.85,w:(Math.random()-.5)*.34,a:.42+Math.random()*.46,p:Math.random()*6.28,crystal:i%9===0}));
+      flakes = Array.from({length: count}, (_,i) => ({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:1.1+Math.random()*2.6,v:.75+Math.random()*1.15,w:(Math.random()-.5)*.55,a:.42+Math.random()*.46,p:Math.random()*6.28,crystal:i%9===0}));
       if (reduced.matches) draw(true); else startSnow();
     };
     const draw = (staticFrame=false) => {
@@ -341,12 +341,12 @@
         const light = document.documentElement.dataset.theme === 'light';
         ctx.beginPath();ctx.fillStyle=light?`rgba(87,139,190,${f.a})`:`rgba(245,251,255,${f.a})`;ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();
         if(f.crystal){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=.8;ctx.beginPath();for(let i=0;i<3;i++){const a=i*Math.PI/3;ctx.moveTo(f.x-Math.cos(a)*f.r*2,f.y-Math.sin(a)*f.r*2);ctx.lineTo(f.x+Math.cos(a)*f.r*2,f.y+Math.sin(a)*f.r*2);}ctx.stroke();}
-        if (!staticFrame) { f.y += f.v; f.x += f.w + Math.sin(f.p += .008)*.13; if(f.y>innerHeight+5){f.y=-5;f.x=Math.random()*innerWidth;} }
+        if (!staticFrame) { f.y += f.v; f.x += f.w + Math.sin(f.p += .012)*.22; if(f.y>innerHeight+5){f.y=-5;f.x=Math.random()*innerWidth;} }
       }
-      if (!staticFrame && snowEnabled && !document.hidden && !reduced.matches) raf=requestAnimationFrame(draw);
+      if (!staticFrame && snowEnabled && !document.hidden && !reduced.matches) raf=requestAnimationFrame(()=>draw(false));
     };
     function stopSnow(){if(raf)cancelAnimationFrame(raf);raf=0;}
-    function startSnow(){stopSnow();if(!snowEnabled||document.hidden)return;if(reduced.matches){draw(true);return;}raf=requestAnimationFrame(draw);}
+    function startSnow(){stopSnow();if(!snowEnabled||document.hidden)return;if(reduced.matches){draw(true);return;}raf=requestAnimationFrame(()=>draw(false));}
     window.addEventListener('resize',resize,{passive:true});
     document.addEventListener('visibilitychange',()=>document.hidden?stopSnow():startSnow());
     const motionChange=()=>startSnow();
@@ -355,14 +355,13 @@
     resize();
 
     // Reproductor embebido del video de YouTube que eligió el usuario; solo carga al tocar.
-    const playerDialog=document.getElementById('holiday-player-dialog');
+    const player=document.getElementById('holiday-player');
     const playerFrame=document.getElementById('holiday-player-frame');
     const closePlayer=document.getElementById('holiday-player-close');
     const videoUrl='https://www.youtube-nocookie.com/embed/J6GE0XnIv7A?autoplay=1&playsinline=1&rel=0';
-    function stopVideo(){if(playerDialog.open)playerDialog.close();playerFrame.removeAttribute('src');musicButton.setAttribute('aria-pressed','false');musicButton.setAttribute('aria-label','Reproducir Christmas Kids');musicButton.textContent='▶ Christmas Kids';}
-    musicButton.addEventListener('click',()=>{if(playerDialog.open){stopVideo();return;}playerFrame.src=videoUrl;playerDialog.showModal();musicButton.setAttribute('aria-pressed','true');musicButton.setAttribute('aria-label','Cerrar Christmas Kids');musicButton.textContent='■ Cerrar canción';});
+    function stopVideo(){playerFrame.removeAttribute('src');player.hidden=true;musicButton.setAttribute('aria-pressed','false');musicButton.setAttribute('aria-label','Reproducir Christmas Kids');musicButton.textContent='▶ Christmas Kids';}
+    musicButton.addEventListener('click',()=>{if(!player.hidden){stopVideo();return;}player.hidden=false;playerFrame.src=videoUrl;musicButton.setAttribute('aria-pressed','true');musicButton.setAttribute('aria-label','Detener Christmas Kids');musicButton.textContent='■ Detener canción';});
     closePlayer.addEventListener('click',stopVideo);
-    playerDialog.addEventListener('close',()=>{playerFrame.removeAttribute('src');musicButton.setAttribute('aria-pressed','false');musicButton.setAttribute('aria-label','Reproducir Christmas Kids');musicButton.textContent='▶ Christmas Kids';});
     window.addEventListener('pagehide',()=>{stopSnow();playerFrame.removeAttribute('src');},{once:true});
   })();
   </script>
