@@ -287,6 +287,17 @@
     @media(max-width:380px){.holiday-player{width:min(230px,calc(100vw - 28px));padding:6px}}
     @media(prefers-reduced-motion:reduce){.holiday-snow{opacity:.5}}
     @media print{.holiday-player{display:none!important}}
+  
+    /* Thin decorative snow caps sit above selected controls, but never intercept taps. */
+    .snow-capped{position:relative!important;isolation:isolate}
+    .snow-capped::after{content:"";position:absolute;z-index:2;pointer-events:none;left:4px;right:4px;top:0;height:7px;border-radius:58% 42% 48% 52% / 100% 90% 45% 40%;background:linear-gradient(180deg,#fff 0%,#f7fbff 55%,#dce8f3 100%);box-shadow:0 1px 2px #09111d55,0 0 5px #fff8;opacity:.94}
+    .holiday-player{box-sizing:border-box;resize:both;overflow:hidden;display:flex;flex-direction:column;min-width:190px;min-height:150px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);padding-bottom:18px}
+    .holiday-player[hidden]{display:none!important}
+    .holiday-player-head{flex:0 0 auto;min-height:32px;padding:2px 3px;touch-action:none;cursor:move;user-select:none;-webkit-user-select:none}
+    #holiday-player-frame{flex:1 1 auto;min-height:80px;height:auto;aspect-ratio:auto}
+    .holiday-player-resize{position:absolute;right:2px;bottom:1px;width:20px;height:20px;z-index:2;border:0;border-radius:0 0 10px 0;background:linear-gradient(135deg,transparent 45%,#c5d9ed 46%,#c5d9ed 54%,transparent 55%),linear-gradient(135deg,transparent 61%,#ffffffcc 62%,#ffffffcc 70%,transparent 71%);cursor:nwse-resize;touch-action:none}
+    .holiday-player-resize:focus-visible{outline:2px solid #f7d978;outline-offset:-2px}
+    @media(prefers-reduced-motion:reduce){.snow-capped::after{box-shadow:0 1px 2px #09111d55}}
   </style>
 </head>
 <body>
@@ -298,8 +309,9 @@
     <button class="holiday-control" id="holiday-music-toggle" type="button" aria-pressed="false" aria-label="Reproducir Christmas Kids">▶ Christmas Kids</button>
   </div>
   <div class="holiday-player" id="holiday-player" role="region" aria-label="Reproductor de Christmas Kids" hidden>
-    <div class="holiday-player-head"><strong>Christmas Kids</strong><button class="holiday-player-close" id="holiday-player-close" type="button" aria-label="Detener canción y cerrar reproductor">×</button></div>
+    <div class="holiday-player-head" id="holiday-player-drag" title="Arrastrá para mover el reproductor"><strong>Christmas Kids · mover</strong><button class="holiday-player-close" id="holiday-player-close" type="button" aria-label="Detener canción y cerrar reproductor">×</button></div>
     <iframe id="holiday-player-frame" title="Christmas Kids — reproductor de YouTube" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <button class="holiday-player-resize" id="holiday-player-resize" type="button" aria-label="Redimensionar reproductor; usá las flechas para cambiar su tamaño"></button>
   </div>
 
   <a class="skip-link" href="#explorar">Saltar al directorio</a>
@@ -358,11 +370,35 @@
     const player=document.getElementById('holiday-player');
     const playerFrame=document.getElementById('holiday-player-frame');
     const closePlayer=document.getElementById('holiday-player-close');
+    const dragHandle=document.getElementById('holiday-player-drag');
+    const resizeHandle=document.getElementById('holiday-player-resize');
+    const playerPrefsKey='gw-holiday-player-v1';
     const videoUrl='https://www.youtube-nocookie.com/embed/J6GE0XnIv7A?autoplay=1&playsinline=1&rel=0';
+    const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+    function savePlayerPrefs(){try{if(player.hidden)return;const r=player.getBoundingClientRect();localStorage.setItem(playerPrefsKey,JSON.stringify({x:Math.round(r.left),y:Math.round(r.top),w:Math.round(r.width),h:Math.round(r.height)}));}catch{}}
+    function clampPlayer(){if(player.hidden)return;const r=player.getBoundingClientRect(),x=clamp(r.left,8,Math.max(8,innerWidth-r.width-8)),y=clamp(r.top,8,Math.max(8,innerHeight-r.height-8));player.style.left=x+'px';player.style.top=y+'px';player.style.right='auto';player.style.bottom='auto';}
+    function restorePlayerPrefs(){try{const d=JSON.parse(localStorage.getItem(playerPrefsKey)||'null');if(!d)return;const w=clamp(Number(d.w)||280,190,Math.max(190,innerWidth-16)),h=clamp(Number(d.h)||190,150,Math.max(150,innerHeight-16));player.style.width=w+'px';player.style.height=h+'px';if(Number.isFinite(d.x)&&Number.isFinite(d.y)){player.style.left=clamp(d.x,8,Math.max(8,innerWidth-w-8))+'px';player.style.top=clamp(d.y,8,Math.max(8,innerHeight-h-8))+'px';player.style.right='auto';player.style.bottom='auto';}}catch{}}
     function stopVideo(){playerFrame.removeAttribute('src');player.hidden=true;musicButton.setAttribute('aria-pressed','false');musicButton.setAttribute('aria-label','Reproducir Christmas Kids');musicButton.textContent='▶ Christmas Kids';}
-    musicButton.addEventListener('click',()=>{if(!player.hidden){stopVideo();return;}player.hidden=false;playerFrame.src=videoUrl;musicButton.setAttribute('aria-pressed','true');musicButton.setAttribute('aria-label','Detener Christmas Kids');musicButton.textContent='■ Detener canción';});
+    restorePlayerPrefs();
+    musicButton.addEventListener('click',()=>{if(!player.hidden){stopVideo();return;}player.hidden=false;clampPlayer();playerFrame.src=videoUrl;musicButton.setAttribute('aria-pressed','true');musicButton.setAttribute('aria-label','Detener Christmas Kids');musicButton.textContent='■ Detener canción';});
     closePlayer.addEventListener('click',stopVideo);
-    window.addEventListener('pagehide',()=>{stopSnow();playerFrame.removeAttribute('src');},{once:true});
+    let drag=null;
+    dragHandle.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;const r=player.getBoundingClientRect();drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top};dragHandle.setPointerCapture(e.pointerId);e.preventDefault();});
+    dragHandle.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;player.style.left=clamp(drag.left+e.clientX-drag.x,8,Math.max(8,innerWidth-player.offsetWidth-8))+'px';player.style.top=clamp(drag.top+e.clientY-drag.y,8,Math.max(8,innerHeight-player.offsetHeight-8))+'px';player.style.right='auto';player.style.bottom='auto';});
+    const stopDrag=e=>{if(drag&&drag.id===e.pointerId){drag=null;savePlayerPrefs();}};
+    dragHandle.addEventListener('pointerup',stopDrag);dragHandle.addEventListener('pointercancel',stopDrag);
+    let resizing=null;
+    resizeHandle.addEventListener('pointerdown',e=>{const r=player.getBoundingClientRect();resizing={id:e.pointerId,x:e.clientX,y:e.clientY,w:r.width,h:r.height};resizeHandle.setPointerCapture(e.pointerId);e.preventDefault();});
+    resizeHandle.addEventListener('pointermove',e=>{if(!resizing||resizing.id!==e.pointerId)return;player.style.width=clamp(resizing.w+e.clientX-resizing.x,190,innerWidth-16)+'px';player.style.height=clamp(resizing.h+e.clientY-resizing.y,150,innerHeight-16)+'px';clampPlayer();});
+    const stopResize=e=>{if(resizing&&resizing.id===e.pointerId){resizing=null;savePlayerPrefs();}};
+    resizeHandle.addEventListener('pointerup',stopResize);resizeHandle.addEventListener('pointercancel',stopResize);
+    resizeHandle.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const r=player.getBoundingClientRect(),step=e.shiftKey?40:16;if(e.key==='ArrowRight')player.style.width=clamp(r.width+step,190,innerWidth-16)+'px';if(e.key==='ArrowLeft')player.style.width=clamp(r.width-step,190,innerWidth-16)+'px';if(e.key==='ArrowDown')player.style.height=clamp(r.height+step,150,innerHeight-16)+'px';if(e.key==='ArrowUp')player.style.height=clamp(r.height-step,150,innerHeight-16)+'px';clampPlayer();savePlayerPrefs();});
+    const playerObserver=new ResizeObserver(savePlayerPrefs);playerObserver.observe(player);
+    window.addEventListener('resize',()=>{clampPlayer();savePlayerPrefs();},{passive:true});
+    function capSnowButtons(root=document){root.querySelectorAll?.('button:not(.holiday-player-close):not(.holiday-player-resize),a.button').forEach(el=>el.classList.add('snow-capped'));if(root.matches?.('button:not(.holiday-player-close):not(.holiday-player-resize),a.button'))root.classList.add('snow-capped');}
+    capSnowButtons();document.addEventListener('DOMContentLoaded',()=>capSnowButtons(),{once:true});
+    const capObserver=new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1)capSnowButtons(n);})));capObserver.observe(document.body,{childList:true,subtree:true});
+    window.addEventListener('pagehide',()=>{stopSnow();playerFrame.removeAttribute('src');playerObserver.disconnect();capObserver.disconnect();},{once:true});
   })();
   </script>
     <section class="content" id="explorar"><aside class="expiry-notice" role="note"><strong>Base temporal:</strong> esta base gratuita de Render vence a los <b>30 días</b>. <p>Si el sitio queda inactivo, los grupos podrían dejar de verse y tal vez haya que volver a publicarlos cuando se reactive. Guardá la descripción y el enlace de tu grupo.</p></aside><div class="section-head"><div><div class="eyebrow muted">DIRECTORIO ABIERTO</div><h2>Encontrá tu grupo</h2></div><span class="count" id="count" role="status" aria-live="polite" aria-atomic="true">Cargando…</span></div><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="Buscar grupos" aria-describedby="search-help" list="search-suggestions" placeholder="Buscá por nombre, descripción o categoría…" autocomplete="off"></label><datalist id="search-suggestions"></datalist><span class="sr-only" id="search-help">Al escribir, podés elegir una sugerencia de nombre o categoría de los grupos públicos. También podés escribir cualquier búsqueda.</span><div class="directory-tools" aria-label="Filtros de grupos"><label class="sr-only" for="category-filter">Filtrar por categoría</label><select id="category-filter" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select><label class="sr-only" for="language-filter">Filtrar por idioma</label><select id="language-filter" aria-label="Filtrar por idioma"><option value="">Todos los idiomas</option></select><label class="sr-only" for="publication-filter">Filtrar por estado</label><select id="publication-filter" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="active">Abiertos a nuevos miembros</option><option value="closed">Cerrados a nuevos miembros</option></select><label class="sr-only" for="sort-groups">Ordenar grupos</label><select id="sort-groups" aria-label="Ordenar grupos"><option value="newest">Más nuevos</option><option value="rating">Mejor puntuados</option><option value="rated">Más votados</option><option value="name">Nombre A-Z</option><option value="recent">Vistos recientemente</option></select><button type="button" class="tool-button" id="favorites-filter" aria-pressed="false">♡ Guardados</button><button type="button" class="tool-button" id="reset-filters" disabled>Restablecer filtros</button></div><span class="sr-only" id="filter-feedback" role="status" aria-live="polite"></span><button class="toggle-blocked" id="toggle-blocked" type="button" hidden>Ver publicaciones bloqueadas</button><div class="status loading" id="status" role="status">Conectando con el directorio…</div><div class="grid" id="grid"></div><div class="empty" id="empty" hidden><h3>Todavía no hay grupos por acá</h3><p>Podés ser la primera persona en compartir uno.</p></div>
