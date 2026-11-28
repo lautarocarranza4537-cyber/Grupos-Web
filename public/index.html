@@ -488,10 +488,8 @@
   function refreshCategories(){
     const sel=$('#category-filter'),current=sel.value,values=[...new Set(groups.map(g=>String(g.category||'General').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
     sel.replaceChildren(new Option('Todas las categorías',''));
-    const topics=document.createElement('optgroup');topics.label='Explorar por tema';
-    for(const [name] of CATEGORY_TOPICS)topics.append(new Option(name,'topic:'+name));
-    sel.append(topics);
-    if(values.length){const published=document.createElement('optgroup');published.label='Categorías publicadas';for(const value of values)published.append(new Option(value,value));sel.append(published);}
+    for(const [name] of CATEGORY_TOPICS)sel.add(new Option('Tema: '+name,'topic:'+name));
+    for(const value of values)sel.add(new Option('Publicada: '+value,value));
     if([...sel.options].some(o=>o.value===current))sel.value=current;
   }
   const refreshBlockedButton = () => { const b=$('#toggle-blocked'), n=readList(BLOCK_IDS).length+readList(BLOCK_CONTACTS).length; b.hidden=n===0; b.textContent=showBlocked?'Ocultar publicaciones bloqueadas':'Ver publicaciones bloqueadas'; };
